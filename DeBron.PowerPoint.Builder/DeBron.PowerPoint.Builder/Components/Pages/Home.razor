@@ -1,0 +1,75 @@
+﻿@page "/"
+@rendermode InteractiveServer
+
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+<p>This component demonstrates showing data.</p>
+
+<table class="table">
+    <thead>
+    <tr>
+        <th>Naam</th>
+        <th>Artiest</th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var song in @_songs)
+    {
+        <tr>
+            <td>@song.Name</td>
+            <td>@song.Artist</td>
+        </tr>
+    }
+    </tbody>
+</table>
+<button @onclick="AddSong">Add song</button>
+
+<form @onsubmit="OnSubmit">
+    <Dialog Title="Voeg nummer toe" ButtonType="submit" Opened="_addSongDialogOpen" CloseButtonClicked="() => _addSongDialogOpen = false" OkText="Voeg toe">
+        <div class="flex-column">
+            <div>
+                <label for="name" class="form-label">Naam</label>
+                <InputText @bind-Value="song.Name"></InputText>
+            </div>
+            <div>
+                <label for="artist" class="form-label">Artiest</label>
+                <InputText @bind-Value="song.Artist"></InputText>
+            </div>
+        </div>
+    </Dialog>
+</form>
+
+@code {
+    private readonly List<Song> _songs = [];
+    private bool _addSongDialogOpen = false;
+    
+    [SupplyParameterFromForm]
+    private Song? song { get; set; }
+
+    protected override void OnInitialized() => song ??= new();
+    
+    private void AddSong()
+    {
+        _addSongDialogOpen = true;
+    }
+    
+    private void OnSubmit()
+    {
+        if (song is null)
+            return;
+
+        _songs.Add(song);
+        song = null;
+        _addSongDialogOpen = false;
+    }
+
+    private class Song
+    {
+        public string Name { get; set; }
+        public string Artist { get; set; }
+    }
+}

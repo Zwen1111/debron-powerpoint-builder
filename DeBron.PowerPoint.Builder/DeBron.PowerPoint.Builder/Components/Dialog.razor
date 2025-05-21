@@ -1,0 +1,34 @@
+﻿@if (Opened)
+{
+    <div class="shadow"></div>
+    <div class="dialog-wrapper">
+
+        <div class="dialog">
+            <div class="dialog-heading">
+                @Title
+            </div>
+            <div class="dialog-body">
+                @ChildContent
+            </div>
+            <div class="dialog-footer">
+                <button class="btn btn-secondary" @onclick="CloseDialog">Annuleer</button>
+                <button class="btn btn-primary" type="@ButtonType" @onclick="CloseDialog">@OkText</button>
+            </div>
+        </div>
+    </div>    
+}
+
+@code {
+    [Parameter] public required string Title { get; set; }
+    [Parameter] public required string OkText { get; set; }
+    [Parameter] public string? ButtonType { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool Opened { get; set; }
+    [Parameter] public EventCallback CloseButtonClicked { get; set; }
+
+    private void CloseDialog()
+    {
+        Opened = false;
+        CloseButtonClicked.InvokeAsync();
+    }
+}
