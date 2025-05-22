@@ -1,14 +1,13 @@
 ﻿@page "/"
 @rendermode InteractiveServer
 @using BlazorBootstrap;
+@using DeBron.PowerPoint.Builder.Models
 
-<PageTitle>Home</PageTitle>
+<PageTitle>debron Presentatie Generator</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>debron Presentatie Generator</h1>
 
-Welcome to your new app.
-
-<p>This component demonstrates showing data.</p>
+Voeg hieronder nummers toe.
 
 <table class="table">
     <thead>
@@ -25,29 +24,34 @@ Welcome to your new app.
             <td>@song.Name</td>
             <td>@song.Artist</td>
             <td>
-                <Button Color="ButtonColor.Light" TooltipTitle="Pas aan" @onclick="() => EditSong(song)"><Icon Name="IconName.Pen"></Icon></Button>
-                <Button Color="ButtonColor.Light" TooltipTitle="Verwijder" @onclick="() => _songs.Remove(song)"><Icon Name="IconName.Trash"></Icon></Button>
+                <div class="d-flex flex-row justify-content-end gap-1">
+                    <Button Color="ButtonColor.Light" TooltipTitle="Pas aan" @onclick="() => EditSong(song)"><Icon Name="IconName.Pen"></Icon></Button>
+                    <Button Color="ButtonColor.Light" TooltipTitle="Verwijder" @onclick="() => _songs.Remove(song)"><Icon Name="IconName.Trash"></Icon></Button>
+                </div>
             </td>
         </tr>
     }
     </tbody>
 </table>
-<button @onclick="AddSong">Add song</button>
+<div class="flex-column gap-1">
+    <Button Color="ButtonColor.Secondary" @onclick="AddSong">Voeg nummer toe</Button>
+    <Button Color="ButtonColor.Primary" @onclick="Build">Genereer presentatie</Button>
+</div>
 
 <form @onsubmit="OnSubmit">
-    <Dialog Title="Voeg nummer toe" OkButtonType="ButtonType.Submit" Opened="_addSongDialogOpen" CloseButtonClicked="@(() => _addSongDialogOpen = false)" OkText="@(_songs.Any(s => s.Id == song?.Id) ? "Voeg toe" : "Sla op")">
+    <Dialog Title="Voeg nummer toe" OkButtonType="ButtonType.Submit" Opened="_addSongDialogOpen" CloseButtonClicked="@(() => _addSongDialogOpen = false)" OkText="@(_songs.Any(s => s.Id == Song?.Id) ? "Voeg toe" : "Sla op")">
         <div class="flex-column flex-grow-1 gap-1">
             <label class="flex-column">
                 Naam
-                <InputText @bind-Value="song.Name"></InputText>
+                <InputText @bind-Value="Song.Name"></InputText>
             </label>
             <label class="flex-column">
                 Artiest
-                <InputText @bind-Value="song.Artist"></InputText>
+                <InputText @bind-Value="Song.Artist"></InputText>
             </label>
             <label class="flex-column flex-grow-1">
                 Songtekst
-                <InputTextArea @bind-Value="song.Lyrics" class="flex-grow-1"></InputTextArea>
+                <InputTextArea @bind-Value="Song.Lyrics" class="flex-grow-1"></InputTextArea>
             </label>
         </div>
     </Dialog>
@@ -59,20 +63,14 @@ Welcome to your new app.
         Id = Guid.NewGuid(),
         Name = "Ik ben een nummer",
         Artist = "DeBron",
-        Lyrics = "Ik ben een nummer, ik ben een nummer, ik ben een nummer"
-    }, new()
-    {
-        Id = Guid.NewGuid(),
-        Name = "Ik ben een ander nummer",
-        Artist = "DeBron",
-        Lyrics = "Ik ben een ander nummer, ik ben een ander nummer, ik ben een ander nummer"
+        Lyrics = "Eerste regel,\nTweede regel,\n\nDerde regel"
     }];
     private bool _addSongDialogOpen = false;
     
     [SupplyParameterFromForm]
-    private Song? song { get; set; }
+    private Song? Song { get; set; }
 
-    protected override void OnInitialized() => song ??= new();
+    protected override void OnInitialized() => Song ??= new();
     
     private void AddSong()
     {
@@ -81,25 +79,34 @@ Welcome to your new app.
     
     private void EditSong(Song song)
     {
-        this.song = song;
+        Song = song;
         _addSongDialogOpen = true;
     }
     
     private void OnSubmit()
     {
-        if (song is null)
+        if (Song is null)
             return;
-
-        _songs.Add(song);
-        song = null;
+        
+        if (_songs.Any(s => s.Id == Song.Id))
+        {
+            var existingSong = _songs.First(s => s.Id == Song.Id);
+            existingSong.Name = Song.Name;
+            existingSong.Artist = Song.Artist;
+            existingSong.Lyrics = Song.Lyrics;
+        }
+        else
+        {
+            Song.Id = Guid.NewGuid();
+            _songs.Add(Song);
+        }
+        
+        Song = null;
         _addSongDialogOpen = false;
     }
 
-    private class Song
+    private void Build()
     {
-        public Guid Id { get; set; } = Guid.NewGuid();
-        public string Name { get; set; }
-        public string Artist { get; set; }
-        public string Lyrics { get; set; }
+        PresentationBuilder.Build(_songs);
     }
 }
