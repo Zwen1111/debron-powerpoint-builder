@@ -1,7 +1,10 @@
 ﻿@page "/"
+@inject IJSRuntime Js
 @rendermode InteractiveServer
 @using BlazorBootstrap;
 @using DeBron.PowerPoint.Builder.Models
+
+<script src="js/downloadHelper.js"></script>
 
 <PageTitle>debron Presentatie Generator</PageTitle>
 
@@ -66,11 +69,8 @@ Voeg hieronder nummers toe.
         Lyrics = "Eerste regel,\nTweede regel,\n\nDerde regel"
     }];
     private bool _addSongDialogOpen = false;
-    
-    [SupplyParameterFromForm]
-    private Song? Song { get; set; }
 
-    protected override void OnInitialized() => Song ??= new();
+    private Song Song { get; set; } = new Song();
     
     private void AddSong()
     {
@@ -85,9 +85,6 @@ Voeg hieronder nummers toe.
     
     private void OnSubmit()
     {
-        if (Song is null)
-            return;
-        
         if (_songs.Any(s => s.Id == Song.Id))
         {
             var existingSong = _songs.First(s => s.Id == Song.Id);
@@ -101,12 +98,20 @@ Voeg hieronder nummers toe.
             _songs.Add(Song);
         }
         
-        Song = null;
+        Song = new Song();
         _addSongDialogOpen = false;
     }
 
-    private void Build()
+    private async Task Build()
     {
-        PresentationBuilder.Build(_songs);
+        var fileName = PresentationBuilder.Build(_songs);
+
+        var stream = File.Open(fileName, FileMode.Open, FileAccess.Read);
+        
+        using var streamRef = new DotNetStreamReference(stream);
+
+        await Js.InvokeVoidAsync("downloadHelper.downloadFileFromStream", "presentation.pptx", streamRef);
+        
+        File.Delete(fileName);
     }
 }

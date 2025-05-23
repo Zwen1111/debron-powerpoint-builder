@@ -7,11 +7,13 @@ namespace DeBron.PowerPoint.Builder;
 
 public static class PresentationBuilder
 {
-    public static void Build(IEnumerable<Song> songs)
+    public static string Build(IEnumerable<Song> songs)
     {
-        File.Copy("template.pptx", "presentation.pptx", true);
+        var fileName = $"{Guid.NewGuid()}.pptx";
+        
+        File.Copy("template.pptx", fileName, true);
 
-        using var presentationDocument = PresentationDocument.Open("presentation.pptx", true);
+        using var presentationDocument = PresentationDocument.Open(fileName, true);
         var presentationPart = presentationDocument.PresentationPart!;
         var presentation = presentationPart.Presentation;
 
@@ -47,6 +49,8 @@ public static class PresentationBuilder
         }
 
         presentation.Save();
+
+        return fileName;
     }
 
     private static void AddTemplateSlideAndReplaceText(
