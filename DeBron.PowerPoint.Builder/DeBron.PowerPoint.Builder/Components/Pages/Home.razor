@@ -3,6 +3,8 @@
 @rendermode InteractiveServer
 @using BlazorBootstrap;
 @using DeBron.PowerPoint.Builder.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 
 <script src="js/downloadHelper.js"></script>
 
@@ -68,9 +70,8 @@ Voeg hieronder nummers toe.
         Artist = "DeBron",
         Lyrics = "Eerste regel,\nTweede regel,\n\nDerde regel"
     }];
-    private bool _addSongDialogOpen = false;
-
-    private Song Song { get; set; } = new Song();
+    private bool _addSongDialogOpen;
+    private Song Song { get; set; } = new();
     
     private void AddSong()
     {

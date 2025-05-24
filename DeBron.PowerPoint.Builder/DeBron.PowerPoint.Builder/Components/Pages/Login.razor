@@ -1,0 +1,97 @@
+﻿@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.WebUtilities
+@using BlazorBootstrap;
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="wrapper">
+    <h1>debron Presentation Builder</h1>
+
+    <EditForm Model="@_loginModel" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator/>
+
+        <div class="pin-input" @onclick="OnClickInputField">
+            
+            @for (int i = 0; i < MaxLength; i++)
+            {
+                <div class="pin-box">
+                    @(i < _loginModel.Pin?.Length ? "•" : "-")
+                </div>
+            }
+
+            <input @ref="_inputRef" type="text" minlength="@MaxLength" maxlength="@MaxLength" @bind="_loginModel.Pin" class="hidden-input" @oninput="OnInput" @onkeydown="OnKeyDown" />
+            
+            @if (_showError)
+            {
+                <div class="incorrect-pin">
+                    Ongeldige pincode. Probeer het opnieuw.
+                </div>
+            }
+        </div>
+
+        <Button Class="login-button" Color="ButtonColor.Primary" Type="ButtonType.Submit">Inloggen</Button>
+    </EditForm>
+</div>
+
+@code {
+    private readonly LoginModel _loginModel = new();
+    private bool _showError;
+    private const int MaxLength = 6;
+    private ElementReference _inputRef;
+
+    private void HandleSubmit()
+    {
+        if (_loginModel.Pin?.Length != MaxLength)
+        {
+            return;
+        }
+        
+        Navigation.NavigateTo($"/Pincode?pin={_loginModel.Pin}", forceLoad: true);
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _inputRef.FocusAsync();
+        }
+        
+        return Task.CompletedTask;
+    }
+
+    public class LoginModel
+    {
+        [Required] public string Pin { get; set; } = "";
+    }
+
+    private void OnClickInputField()
+    {
+        _inputRef.FocusAsync();
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _loginModel.Pin = e.Value?.ToString() ?? "";
+    }
+    
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            HandleSubmit();
+        }
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("error", out var errorValue))
+        {
+            _showError = errorValue == "true";
+        }
+
+        return Task.CompletedTask;
+    }
+
+}
