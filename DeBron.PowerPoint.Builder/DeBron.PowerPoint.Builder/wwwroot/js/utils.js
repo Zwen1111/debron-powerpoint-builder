@@ -12,3 +12,17 @@ window.downloadHelper = {
         URL.revokeObjectURL(url);
     }
 };
+
+window.registerPasteHandler = function (dotNetHelper, elementId) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    element.addEventListener('paste', async function (event) {
+        event.preventDefault(); // voorkom standaard plakken
+        const pastedText = (event.clipboardData || window.clipboardData).getData('text');
+
+        const transformed = await dotNetHelper.invokeMethodAsync('HandlePaste', pastedText);
+        element.value = transformed;
+    });
+};
+

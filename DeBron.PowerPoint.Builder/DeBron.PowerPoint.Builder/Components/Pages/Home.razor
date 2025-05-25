@@ -1,12 +1,13 @@
 ﻿@page "/"
 @inject IJSRuntime Js
 @rendermode InteractiveServer
+@using System.Text.RegularExpressions
 @using BlazorBootstrap;
 @using DeBron.PowerPoint.Builder.Models
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 
-<script src="js/downloadHelper.js"></script>
+<script src="js/utils.js"></script>
 
 <PageTitle>debron Presentatie Generator</PageTitle>
 
@@ -18,7 +19,7 @@ Voeg hieronder nummers toe.
     <thead>
     <tr>
         <th>Naam</th>
-        <th>Artiest</th>
+        <th>Ondertitel/Artiest</th>
         <td />
     </tr>
     </thead>
@@ -27,7 +28,7 @@ Voeg hieronder nummers toe.
     {
         <tr>
             <td>@song.Name</td>
-            <td>@song.Artist</td>
+            <td>@song.Subtitle</td>
             <td>
                 <div class="d-flex flex-row justify-content-end gap-1">
                     <Button Color="ButtonColor.Light" TooltipTitle="Pas aan" @onclick="() => EditSong(song)"><Icon Name="IconName.Pen"></Icon></Button>
@@ -44,35 +45,38 @@ Voeg hieronder nummers toe.
 </div>
 
 <form @onsubmit="OnSubmit">
-    <Dialog Title="Voeg nummer toe" OkButtonType="ButtonType.Submit" Opened="_addSongDialogOpen" CloseButtonClicked="@(() => _addSongDialogOpen = false)" OkText="@(_songs.Any(s => s.Id == Song?.Id) ? "Voeg toe" : "Sla op")">
+    <Dialog Title="Voeg nummer toe" OkButtonType="ButtonType.Submit" Opened="_addSongDialogOpen" CloseButtonClicked="@(() => _addSongDialogOpen = false)" OkText="Sla op">
         <div class="flex-column flex-grow-1 gap-1">
             <label class="flex-column">
                 Naam
                 <InputText @bind-Value="Song.Name"></InputText>
             </label>
             <label class="flex-column">
-                Artiest
-                <InputText @bind-Value="Song.Artist"></InputText>
+                Ondertitel/Artiest
+                <InputText @bind-Value="Song.Subtitle"></InputText>
             </label>
             <label class="flex-column flex-grow-1">
-                Songtekst
-                <InputTextArea @bind-Value="Song.Lyrics" class="flex-grow-1"></InputTextArea>
+                Songtekst (lege regel voor nieuwe dia, 4 lege regels voor lege dia ertussen)
+                <InputTextArea id="lyricsTextArea" @bind-Value="Song.Lyrics" class="flex-grow-1" ></InputTextArea>
             </label>
         </div>
     </Dialog>
 </form>
 
 @code {
-    private readonly List<Song> _songs = [new()
-    {
-        Id = Guid.NewGuid(),
-        Name = "Ik ben een nummer",
-        Artist = "DeBron",
-        Lyrics = "Eerste regel,\nTweede regel,\n\nDerde regel"
-    }];
+    private readonly List<Song> _songs = [];
     private bool _addSongDialogOpen;
     private Song Song { get; set; } = new();
-    
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_addSongDialogOpen)
+        {
+            await Js.InvokeVoidAsync("registerPasteHandler", DotNetObjectReference.Create(this), "lyricsTextArea");
+        }
+    }
+
+
     private void AddSong()
     {
         _addSongDialogOpen = true;
@@ -90,12 +94,11 @@ Voeg hieronder nummers toe.
         {
             var existingSong = _songs.First(s => s.Id == Song.Id);
             existingSong.Name = Song.Name;
-            existingSong.Artist = Song.Artist;
+            existingSong.Subtitle = Song.Subtitle;
             existingSong.Lyrics = Song.Lyrics;
         }
         else
         {
-            Song.Id = Guid.NewGuid();
             _songs.Add(Song);
         }
         
@@ -114,5 +117,60 @@ Voeg hieronder nummers toe.
         await Js.InvokeVoidAsync("downloadHelper.downloadFileFromStream", "presentation.pptx", streamRef);
         
         File.Delete(fileName);
+    }
+    
+    [JSInvokable]
+    public Task<string> HandlePaste(string pastedText)
+    {
+        if (!string.IsNullOrWhiteSpace(Song.Lyrics)) return Task.FromResult(string.Empty);
+        
+        var transformed = TransformPastedText(pastedText);
+        Song.Lyrics = transformed;
+        StateHasChanged(); // Update de UI
+        return Task.FromResult(transformed);
+    }
+
+    private static string TransformPastedText(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return input;
+
+        // Stap 1: Normalizeer naar \n
+        input = input.Replace("\r\n", "\n").Replace("\r", "\n");
+
+        // Stap 2: Vervang 5 of meer newlines door 4
+        input = Regex.Replace(input, @"(\n){6,}", "\n\n\n\n\n");
+
+        // Stap 3: Vervang exact 3 newlines door 2
+        input = Regex.Replace(input, @"(?<!\n)(\n){4}(?!\n)", "\n\n\n");
+
+        // Stap 4: Voeg witregel toe na elke 2 niet-lege regels als er nog een derde volgt
+        var lines = input.Split('\n');
+        var result = new List<string>();
+        int bufferCount = 0;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            result.Add(line);
+
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                bufferCount++;
+            }
+            else
+            {
+                bufferCount = 0;
+            }
+
+            bool nextExists = i + 1 < lines.Length;
+            if (bufferCount == 2 && nextExists && !string.IsNullOrWhiteSpace(lines[i + 1]))
+            {
+                result.Add(""); // witregel
+                bufferCount = 0;
+            }
+        }
+
+        return string.Join("\n", result);
     }
 }
