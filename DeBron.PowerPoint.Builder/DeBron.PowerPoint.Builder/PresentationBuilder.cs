@@ -18,11 +18,7 @@ public static class PresentationBuilder
         var presentation = presentationPart.Presentation;
 
         // Haal de eerste slide als sjabloon
-        var sourceSlidePart = presentationPart.SlideParts.First();
-        var layoutPart = sourceSlidePart.SlideLayoutPart!;
-
-        // Clone de slide XML naar geheugen
-        var slideXml = (Slide)sourceSlidePart.Slide.CloneNode(true);
+        var sourceSlidePart = presentationPart.SlideParts.Select(s => (s.SlideLayoutPart, (Slide)s.Slide.CloneNode(true))).ToList();
 
         // Verwijder alle bestaande slides
         var slideIds = presentation.SlideIdList!.ChildElements.OfType<SlideId>().ToList();
@@ -37,15 +33,34 @@ public static class PresentationBuilder
 
         foreach (var song in songs)
         {
+            AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[1].Item2,
+                sourceSlidePart[1].SlideLayoutPart!, new Dictionary<string, string>
+                {
+                    { "Titel", song.Name },
+                    { "Ondertitel", song.Subtitle }
+                }, ref maxSlideId);
+
+            AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[0].Item2,
+                sourceSlidePart[0].SlideLayoutPart!, new Dictionary<string, string>
+                {
+                    { "Liedtekst", string.Empty }
+                }, ref maxSlideId);
+            
             var lyricsPerSlide = song.Lyrics.Split("\n\n");
 
             foreach (var lyrics in lyricsPerSlide)
             {
-                AddTemplateSlideAndReplaceText(presentationPart, slideXml, layoutPart, new Dictionary<string, string>
+                AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[0].Item2, sourceSlidePart[0].SlideLayoutPart!, new Dictionary<string, string>
                 {
-                    { "ondertiteling", lyrics }
+                    { "Liedtekst", lyrics }
                 }, ref maxSlideId);
             }
+
+            AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[0].Item2,
+                sourceSlidePart[0].SlideLayoutPart!, new Dictionary<string, string>
+                {
+                    { "Liedtekst", string.Empty }
+                }, ref maxSlideId);
         }
 
         presentation.Save();
