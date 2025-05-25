@@ -1,6 +1,7 @@
 ﻿@page "/"
 @inject IJSRuntime Js
 @rendermode InteractiveServer
+@using System.Text.Json
 @using System.Text.RegularExpressions
 @using BlazorBootstrap;
 @using DeBron.PowerPoint.Builder.Models
@@ -20,7 +21,9 @@ Voeg hieronder nummers toe.
     <tr>
         <th>Naam</th>
         <th>Ondertitel/Artiest</th>
-        <td />
+        <th>
+            <Button Color="ButtonColor.Secondary" @onclick="ClearSongs">Verwijder alles</Button>
+        </th>
     </tr>
     </thead>
     <tbody>
@@ -32,7 +35,7 @@ Voeg hieronder nummers toe.
             <td>
                 <div class="d-flex flex-row justify-content-end gap-1">
                     <Button Color="ButtonColor.Light" TooltipTitle="Pas aan" @onclick="() => EditSong(song)"><Icon Name="IconName.Pen"></Icon></Button>
-                    <Button Color="ButtonColor.Light" TooltipTitle="Verwijder" @onclick="() => _songs.Remove(song)"><Icon Name="IconName.Trash"></Icon></Button>
+                    <Button Color="ButtonColor.Light" TooltipTitle="Verwijder" @onclick="() => RemoveSong(song)"><Icon Name="IconName.Trash"></Icon></Button>
                 </div>
             </td>
         </tr>
@@ -45,7 +48,7 @@ Voeg hieronder nummers toe.
 </div>
 
 <form @onsubmit="OnSubmit">
-    <Dialog Title="Voeg nummer toe" OkButtonType="ButtonType.Submit" Opened="_addSongDialogOpen" CloseButtonClicked="@(() => _addSongDialogOpen = false)" OkText="Sla op">
+    <Dialog Title="Voeg nummer toe" OkButtonType="ButtonType.Submit" Opened="_addSongDialogOpen" CloseButtonClicked="CloseDialog" OkText="Sla op">
         <div class="flex-column flex-grow-1 gap-1">
             <label class="flex-column">
                 Naam
@@ -64,18 +67,38 @@ Voeg hieronder nummers toe.
 </form>
 
 @code {
-    private readonly List<Song> _songs = [];
+    private List<Song> _songs = [];
     private bool _addSongDialogOpen;
+    private bool _renderedDialog = false;
     private Song Song { get; set; } = new();
-
+    
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_addSongDialogOpen)
+        if (_addSongDialogOpen && !_renderedDialog)
         {
+            _renderedDialog = true;
             await Js.InvokeVoidAsync("registerPasteHandler", DotNetObjectReference.Create(this), "lyricsTextArea");
         }
+        
+        if (firstRender)
+        {
+            // Laad de nummers uit localStorage
+            var savedSongs = await Js.InvokeAsync<string>("localStorageFunctions.getItem", "songs");
+            if (!string.IsNullOrEmpty(savedSongs))
+            {
+                _songs = JsonSerializer.Deserialize<List<Song>>(savedSongs) ?? [];
+            }
+            
+            StateHasChanged();
+        }
     }
-
+    
+    private void CloseDialog()
+    {
+        _addSongDialogOpen = false;
+        Song = new Song();
+        _renderedDialog = false;
+    }
 
     private void AddSong()
     {
@@ -88,7 +111,15 @@ Voeg hieronder nummers toe.
         _addSongDialogOpen = true;
     }
     
-    private void OnSubmit()
+    private void RemoveSong(Song song)
+    {
+        _songs.Remove(song);
+        
+        // Sla de nummers op in localStorage
+        Js.InvokeVoidAsync("localStorageFunctions.setItem", "songs", JsonSerializer.Serialize(_songs));
+    }
+    
+    private async Task OnSubmit()
     {
         if (_songs.Any(s => s.Id == Song.Id))
         {
@@ -104,6 +135,15 @@ Voeg hieronder nummers toe.
         
         Song = new Song();
         _addSongDialogOpen = false;
+        
+        // Sla de nummers op in localStorage
+        await Js.InvokeVoidAsync("localStorageFunctions.setItem", "songs", JsonSerializer.Serialize(_songs));
+    }
+
+    private async Task ClearSongs()
+    {
+        _songs.Clear();
+        await Js.InvokeVoidAsync("localStorageFunctions.removeItem", "songs");
     }
 
     private async Task Build()
@@ -118,7 +158,7 @@ Voeg hieronder nummers toe.
         
         File.Delete(fileName);
     }
-    
+
     [JSInvokable]
     public Task<string> HandlePaste(string pastedText)
     {
