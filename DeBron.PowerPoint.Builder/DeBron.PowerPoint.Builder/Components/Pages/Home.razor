@@ -59,7 +59,7 @@ Voeg hieronder nummers toe.
                 <InputText @bind-Value="Song.Subtitle"></InputText>
             </label>
             <label class="flex-column flex-grow-1">
-                Songtekst (lege regel voor nieuwe dia, 4 lege regels voor lege dia ertussen)
+                Songtekst (lege regel voor nieuwe dia, 2 lege regels voor lege dia ertussen)
                 <InputTextArea id="lyricsTextArea" @bind-Value="Song.Lyrics" class="flex-grow-1" ></InputTextArea>
             </label>
         </div>
@@ -82,7 +82,6 @@ Voeg hieronder nummers toe.
         
         if (firstRender)
         {
-            // Laad de nummers uit localStorage
             var savedSongs = await Js.InvokeAsync<string>("localStorageFunctions.getItem", "songs");
             if (!string.IsNullOrEmpty(savedSongs))
             {
@@ -115,7 +114,6 @@ Voeg hieronder nummers toe.
     {
         _songs.Remove(song);
         
-        // Sla de nummers op in localStorage
         Js.InvokeVoidAsync("localStorageFunctions.setItem", "songs", JsonSerializer.Serialize(_songs));
     }
     
@@ -160,9 +158,9 @@ Voeg hieronder nummers toe.
     }
 
     [JSInvokable]
-    public Task<string> HandlePaste(string pastedText)
+    public Task<string> HandlePaste(string currentText, string pastedText)
     {
-        if (!string.IsNullOrWhiteSpace(Song.Lyrics)) return Task.FromResult(string.Empty);
+        if (!string.IsNullOrWhiteSpace(currentText)) return Task.FromResult(string.Empty);
         
         var transformed = TransformPastedText(pastedText);
         Song.Lyrics = transformed;
@@ -175,16 +173,9 @@ Voeg hieronder nummers toe.
         if (string.IsNullOrWhiteSpace(input))
             return input;
 
-        // Stap 1: Normalizeer naar \n
         input = input.Replace("\r\n", "\n").Replace("\r", "\n");
+        input = Regex.Replace(input, @"(\n){4,}", "\n\n\n");
 
-        // Stap 2: Vervang 5 of meer newlines door 4
-        input = Regex.Replace(input, @"(\n){6,}", "\n\n\n\n\n");
-
-        // Stap 3: Vervang exact 3 newlines door 2
-        input = Regex.Replace(input, @"(?<!\n)(\n){4}(?!\n)", "\n\n\n");
-
-        // Stap 4: Voeg witregel toe na elke 2 niet-lege regels als er nog een derde volgt
         var lines = input.Split('\n');
         var result = new List<string>();
         int bufferCount = 0;

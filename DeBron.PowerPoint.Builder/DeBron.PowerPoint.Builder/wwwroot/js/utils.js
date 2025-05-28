@@ -21,7 +21,7 @@ window.registerPasteHandler = function (dotNetHelper, elementId) {
         event.preventDefault(); // voorkom standaard plakken
         const pastedText = (event.clipboardData || window.clipboardData).getData('text');
 
-        const transformed = await dotNetHelper.invokeMethodAsync('HandlePaste', pastedText);
+        const transformed = await dotNetHelper.invokeMethodAsync('HandlePaste', element.textContent, pastedText);
         element.value = transformed;
     });
 };

@@ -46,7 +46,7 @@ public class PresentationBuilder
             { "Liedtekst", string.Empty }
         });
 
-        var lyricsPerSlide = song.Lyrics.Split("\n\n");
+        var lyricsPerSlide = song.Lyrics.Trim().Split("\n\n").SelectMany<string, string>(x => x.StartsWith("\n") ? [string.Empty, x.Trim()] : [x.Trim()]).ToList();
 
         foreach (var lyrics in lyricsPerSlide)
         {
