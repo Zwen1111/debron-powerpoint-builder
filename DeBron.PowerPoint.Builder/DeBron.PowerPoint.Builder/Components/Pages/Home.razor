@@ -10,41 +10,45 @@
 
 <script src="js/utils.js"></script>
 
-<PageTitle>debron Presentatie Generator</PageTitle>
+<div class="flex-column gap-3">
+    <PageTitle>debron Presentatie Generator</PageTitle>
 
-<h1>debron Presentatie Generator</h1>
+    <h1>debron Presentatie Generator</h1>
 
-Voeg hieronder nummers toe.
+    <SortableList Class="mb-3 sortableList"
+                  Handle=".bb-sortable-list-handle"
+                  TItem="Song"
+                  Data="_songs"
+                  Context="item"
+                  OnUpdate="@MoveParts"
+                  EmptyText="Er zijn nog geen nummers toegevoegd.">
 
-<table class="table">
-    <thead>
-    <tr>
-        <th>Naam</th>
-        <th>Ondertitel/Artiest</th>
-        <th>
-            <Button Color="ButtonColor.Secondary" @onclick="ClearSongs">Verwijder alles</Button>
-        </th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var song in @_songs)
-    {
-        <tr>
-            <td>@song.Name</td>
-            <td>@song.Subtitle</td>
-            <td>
-                <div class="d-flex flex-row justify-content-end gap-1">
-                    <Button Color="ButtonColor.Light" TooltipTitle="Pas aan" @onclick="() => EditSong(song)"><Icon Name="IconName.Pen"></Icon></Button>
-                    <Button Color="ButtonColor.Light" TooltipTitle="Verwijder" @onclick="() => RemoveSong(song)"><Icon Name="IconName.Trash"></Icon></Button>
+        <ItemTemplate>
+            <div class="d-flex justify-content-start align-items-center">
+                <div class="bb-sortable-list-handle pe-2">
+                    <Icon Name="IconName.GripVertical"/>
                 </div>
-            </td>
-        </tr>
-    }
-    </tbody>
-</table>
-<div class="flex-column gap-1">
-    <Button Color="ButtonColor.Secondary" @onclick="AddSong">Voeg nummer toe</Button>
-    <Button Color="ButtonColor.Primary" @onclick="Build">Genereer presentatie</Button>
+                <div class="d-flex flex-row flex-grow-1 gap-1 justify-content-between align-items-center">
+                    <div><b>@item.Name</b> - @item.Subtitle</div>
+                    
+                    <div>
+                        <Button Color="ButtonColor.Light" TooltipTitle="Pas aan" @onclick="@(() => EditSong(item))">
+                            <Icon Name="IconName.Pen"></Icon>
+                        </Button>
+                        <Button Color="ButtonColor.Light" TooltipTitle="Verwijder" @onclick="@(() => RemoveSong(item))">
+                            <Icon Name="IconName.Trash"></Icon>
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </ItemTemplate>
+
+    </SortableList>
+
+    <div class="flex-column gap-1">
+        <Button Color="ButtonColor.Secondary" @onclick="AddSong">Voeg nummer toe</Button>
+        <Button @ref="_generateButton" Color="ButtonColor.Primary" @onclick="Generate">Genereer presentatie</Button>
+    </div>
 </div>
 
 <form @onsubmit="OnSubmit">
@@ -71,6 +75,7 @@ Voeg hieronder nummers toe.
     private bool _addSongDialogOpen;
     private bool _renderedDialog = false;
     private Song Song { get; set; } = new();
+    private Button _generateButton = null!;
     
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -90,6 +95,18 @@ Voeg hieronder nummers toe.
             
             StateHasChanged();
         }
+    }
+
+    private void MoveParts(SortableListEventArgs args)
+    {
+        var itemToMove = _songs[args.OldIndex];
+
+        _songs.RemoveAt(args.OldIndex);
+
+        if (args.NewIndex < _songs.Count)
+            _songs.Insert(args.NewIndex, itemToMove);
+        else
+            _songs.Add(itemToMove);
     }
     
     private void CloseDialog()
@@ -144,8 +161,10 @@ Voeg hieronder nummers toe.
         await Js.InvokeVoidAsync("localStorageFunctions.removeItem", "songs");
     }
 
-    private async Task Build()
+    private async Task Generate()
     {
+        _generateButton.ShowLoading("Genereren...");
+        
         var fileName = new PresentationBuilder().Build(_songs);
 
         var stream = File.Open(fileName, FileMode.Open, FileAccess.Read);
@@ -153,6 +172,8 @@ Voeg hieronder nummers toe.
         using var streamRef = new DotNetStreamReference(stream);
 
         await Js.InvokeVoidAsync("downloadHelper.downloadFileFromStream", "presentation.pptx", streamRef);
+        
+        _generateButton.HideLoading();
         
         File.Delete(fileName);
     }
