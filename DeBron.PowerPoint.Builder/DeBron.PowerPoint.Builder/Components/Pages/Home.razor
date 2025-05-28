@@ -148,7 +148,7 @@ Voeg hieronder nummers toe.
 
     private async Task Build()
     {
-        var fileName = PresentationBuilder.Build(_songs);
+        var fileName = new PresentationBuilder().Build(_songs);
 
         var stream = File.Open(fileName, FileMode.Open, FileAccess.Read);
         

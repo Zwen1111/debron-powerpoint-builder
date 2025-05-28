@@ -1,83 +1,86 @@
 ﻿using DeBron.PowerPoint.Builder.Models;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
-using Text = DocumentFormat.OpenXml.Presentation.Text;
 
 namespace DeBron.PowerPoint.Builder;
 
-public static class PresentationBuilder
+public class PresentationBuilder
 {
-    public static string Build(IEnumerable<Song> songs)
+    private readonly PresentationPart _presentationPart;
+    private readonly List<(SlideLayoutPart LayoutPart, Slide Slide)> _slideParts;
+    private readonly string _fileName = $"{Guid.NewGuid()}.pptx";
+    private readonly PresentationDocument _presentationDocument;
+    private uint _maxSlideId = 256;
+
+    public PresentationBuilder()
     {
-        var fileName = $"{Guid.NewGuid()}.pptx";
+        File.Copy("template.pptx", _fileName, true);
+
+        _presentationDocument = PresentationDocument.Open(_fileName, true);
+        _presentationPart = _presentationDocument.PresentationPart!;
+
+        _slideParts = _presentationPart.SlideParts.Select(s => (s.SlideLayoutPart!, (Slide)s.Slide.CloneNode(true))).ToList();
         
-        File.Copy("template.pptx", fileName, true);
+        RemoveExistingSlides();
+    }
+    
+    public string Build(List<Song> songs)
+    {
+        songs.ForEach(AddSongWithSubtitles);
 
-        using var presentationDocument = PresentationDocument.Open(fileName, true);
-        var presentationPart = presentationDocument.PresentationPart!;
-        var presentation = presentationPart.Presentation;
+        _presentationDocument.Dispose();
 
-        // Haal de eerste slide als sjabloon
-        var sourceSlidePart = presentationPart.SlideParts.Select(s => (s.SlideLayoutPart, (Slide)s.Slide.CloneNode(true))).ToList();
-
-        // Verwijder alle bestaande slides
-        var slideIds = presentation.SlideIdList!.ChildElements.OfType<SlideId>().ToList();
-        foreach (var slideId in slideIds)
-        {
-            var slidePart = (SlidePart)presentationPart.GetPartById(slideId.RelationshipId!);
-            presentationPart.DeletePart(slidePart);
-        }
-        presentation.SlideIdList.RemoveAllChildren();
-
-        uint maxSlideId = 256;
-
-        foreach (var song in songs)
-        {
-            AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[1].Item2,
-                sourceSlidePart[1].SlideLayoutPart!, new Dictionary<string, string>
-                {
-                    { "Titel", song.Name },
-                    { "Ondertitel", song.Subtitle }
-                }, ref maxSlideId);
-
-            AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[0].Item2,
-                sourceSlidePart[0].SlideLayoutPart!, new Dictionary<string, string>
-                {
-                    { "Liedtekst", string.Empty }
-                }, ref maxSlideId);
-            
-            var lyricsPerSlide = song.Lyrics.Split("\n\n");
-
-            foreach (var lyrics in lyricsPerSlide)
-            {
-                AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[0].Item2, sourceSlidePart[0].SlideLayoutPart!, new Dictionary<string, string>
-                {
-                    { "Liedtekst", lyrics }
-                }, ref maxSlideId);
-            }
-
-            AddTemplateSlideAndReplaceText(presentationPart, sourceSlidePart[0].Item2,
-                sourceSlidePart[0].SlideLayoutPart!, new Dictionary<string, string>
-                {
-                    { "Liedtekst", string.Empty }
-                }, ref maxSlideId);
-        }
-
-        presentation.Save();
-
-        return fileName;
+        return _fileName;
     }
 
-    private static void AddTemplateSlideAndReplaceText(
-        PresentationPart presentationPart,
-        Slide slideTemplate,
-        SlideLayoutPart layoutPart,
-        Dictionary<string, string> replacements,
-        ref uint maxSlideId)
+    private void AddSongWithSubtitles(Song song)
     {
-        var newSlidePart = CopySlide(presentationPart, slideTemplate, layoutPart, ref maxSlideId);
+        AddTemplateSlideAndReplaceText(_slideParts[1], new Dictionary<string, string>
+        {
+            { "Titel", song.Name },
+            { "Ondertitel", song.Subtitle }
+        });
 
-        var texts = newSlidePart.Slide.Descendants<DocumentFormat.OpenXml.Drawing.Text>();
+        AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
+        {
+            { "Liedtekst", string.Empty }
+        });
+
+        var lyricsPerSlide = song.Lyrics.Split("\n\n");
+
+        foreach (var lyrics in lyricsPerSlide)
+        {
+            AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
+            {
+                { "Liedtekst", lyrics }
+            });
+        }
+
+        AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
+        {
+            { "Liedtekst", string.Empty }
+        });
+    }
+
+    private void RemoveExistingSlides()
+    {
+        var slideIds = _presentationPart.Presentation.SlideIdList!.ChildElements.OfType<SlideId>().ToList();
+        foreach (var slideId in slideIds)
+        {
+            var slidePart = (SlidePart)_presentationPart.GetPartById(slideId.RelationshipId!);
+            _presentationPart.DeletePart(slidePart);
+        }
+
+        _presentationPart.Presentation.SlideIdList.RemoveAllChildren();
+    }
+
+    private void AddTemplateSlideAndReplaceText(
+        (SlideLayoutPart LayoutPart, Slide Slide) slidePart,
+        Dictionary<string, string> replacements)
+    {
+        var newSlidePart = CopySlide(slidePart);
+
+        var texts = newSlidePart.Slide.Descendants<DocumentFormat.OpenXml.Drawing.Text>().ToList();
         foreach (var (placeholder, value) in replacements)
         {
             foreach (var text in texts)
@@ -89,27 +92,22 @@ public static class PresentationBuilder
         newSlidePart.Slide.Save();
     }
 
-    private static SlidePart CopySlide(
-        PresentationPart presentationPart,
-        Slide slideTemplate,
-        SlideLayoutPart layoutPart,
-        ref uint maxSlideId)
+    private SlidePart CopySlide((SlideLayoutPart LayoutPart, Slide Slide) slidePart)
     {
-        var newSlidePart = presentationPart.AddNewPart<SlidePart>();
-        newSlidePart.Slide = (Slide)slideTemplate.CloneNode(true);
+        var newSlidePart = _presentationPart.AddNewPart<SlidePart>();
+        newSlidePart.Slide = (Slide)slidePart.Slide.CloneNode(true);
 
-        newSlidePart.AddPart(layoutPart);
+        newSlidePart.AddPart(slidePart.LayoutPart);
 
-        var relId = presentationPart.GetIdOfPart(newSlidePart);
+        var relId = _presentationPart.GetIdOfPart(newSlidePart);
         var newSlideId = new SlideId
         {
-            Id = ++maxSlideId,
+            Id = ++_maxSlideId,
             RelationshipId = relId
         };
 
-        presentationPart.Presentation.SlideIdList!.Append(newSlideId);
+        _presentationPart.Presentation.SlideIdList!.Append(newSlideId);
 
         return newSlidePart;
     }
-
 }
