@@ -1,16 +1,43 @@
 ﻿using DeBron.PowerPoint.Builder.Models;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
+using SlideLayout = DeBron.PowerPoint.Builder.Models.SlideLayout;
 
 namespace DeBron.PowerPoint.Builder;
 
 public class PresentationBuilder
 {
     private readonly PresentationPart _presentationPart;
-    private readonly List<(SlideLayoutPart LayoutPart, Slide Slide)> _slideParts;
+    private readonly Dictionary<SlideLayout, (SlideLayoutPart LayoutPart, Slide Slide)> _slidePartsById;
     private readonly string _fileName = $"{Guid.NewGuid()}.pptx";
     private readonly PresentationDocument _presentationDocument;
     private uint _maxSlideId = 256;
+
+    private readonly SlideLayout[] _slideLayoutOrder =
+    [
+        SlideLayout.WelkomVooraf,
+        SlideLayout.LiturgieVooraf,
+        SlideLayout.CollecteVooraf,
+        SlideLayout.Thema,
+        SlideLayout.Welkom,
+        SlideLayout.Liturgie,
+        SlideLayout.PaarsMetTitel,
+        SlideLayout.TussenSlide,
+        SlideLayout.LiedAankondiging,
+        SlideLayout.LiedAankondigingOverlay,
+        SlideLayout.Ondertiteling,
+        SlideLayout.Gebed,
+        SlideLayout.BlauwMetTitel,
+        SlideLayout.LuisterLiedAankondiging,
+        SlideLayout.WitMetLiedtekst,
+        SlideLayout.Koffermoment,
+        SlideLayout.BijbellezenAankondiging,
+        SlideLayout.Bijbeltekst,
+        SlideLayout.CollecteTweeDoelen,
+        SlideLayout.CollecteEenDoel,
+        SlideLayout.TotZiensMetGebed,
+        SlideLayout.TotZiens
+    ];
 
     public PresentationBuilder()
     {
@@ -19,14 +46,75 @@ public class PresentationBuilder
         _presentationDocument = PresentationDocument.Open(_fileName, true);
         _presentationPart = _presentationDocument.PresentationPart!;
 
-        _slideParts = _presentationPart.SlideParts.Select(s => (s.SlideLayoutPart!, (Slide)s.Slide.CloneNode(true))).ToList();
+        var slideIdList = _presentationPart.Presentation.SlideIdList;
+
+        _slidePartsById = (slideIdList?.OfType<SlideId>().Select(slideId =>
+        {
+            var slidePart = (SlidePart)_presentationPart.GetPartById(slideId.RelationshipId!);
+
+            return (slidePart.SlideLayoutPart!, (Slide)slidePart.Slide.CloneNode(true));
+        }).ToList() ?? []).Zip(_slideLayoutOrder).ToDictionary(x => x.Second, x => x.First);
         
         RemoveExistingSlides();
     }
     
-    public string Build(List<Song> songs)
+    public string Build(List<IPresentationPart> parts)
     {
-        songs.ForEach(AddSongWithSubtitles);
+        foreach (var presentationPart in parts)
+        {
+            switch (presentationPart)
+            {
+                case Song { UseSubtitle: true } song:
+                    AddSongWithSubtitles(song);
+                    break;
+                case Song song:
+                    AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.LiedAankondiging], new Dictionary<string, string>
+                    {
+                        { "Titel", song.Name },
+                        { "Ondertitel", string.Empty }
+                    });
+                    AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.WitMetLiedtekst], new Dictionary<string, string>
+                    {
+                        { "Liedtekst", song.Lyrics }
+                    });
+                    break;
+                case Collection collection:
+                    var layout = string.IsNullOrWhiteSpace(collection.SecondGoal)
+                            ? SlideLayout.CollecteEenDoel
+                            : SlideLayout.CollecteTweeDoelen;
+                    
+                    AddTemplateSlideAndReplaceText(_slidePartsById[layout], new Dictionary<string, string>
+                    {
+                        { "Collecte1", collection.FirstGoal },
+                        { "Collecte2", collection.SecondGoal }
+                    });
+                    break;
+                case Prayer _:
+                    AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.Gebed], new Dictionary<string, string>());
+                    break;
+                case BibleReading bibleReading:
+                    AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.Bijbeltekst], new Dictionary<string, string>
+                    {
+                        { "Titel", bibleReading.Title },
+                        { "Tekst", bibleReading.Text }
+                    });
+                    break;
+                case TrustAndGreeting _:
+                    AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.PaarsMetTitel], new Dictionary<string, string>
+                    {
+                        { "Titel", "vertrouwen & groet" }
+                    });
+                    break;
+                case ChildrenMoment childrenMoment:
+                    AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.Koffermoment], new Dictionary<string, string>
+                    {
+                        { "Koffermomenter", childrenMoment.Person }
+                    });
+                    break;
+                default:
+                    throw new NotSupportedException($"Unsupported presentation part type: {presentationPart.GetType().Name}");
+            }
+        }
 
         _presentationDocument.Dispose();
 
@@ -35,13 +123,13 @@ public class PresentationBuilder
 
     private void AddSongWithSubtitles(Song song)
     {
-        AddTemplateSlideAndReplaceText(_slideParts[1], new Dictionary<string, string>
+        AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.LiedAankondigingOverlay], new Dictionary<string, string>
         {
             { "Titel", song.Name },
             { "Ondertitel", song.Subtitle }
         });
 
-        AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
+        AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.Ondertiteling], new Dictionary<string, string>
         {
             { "Liedtekst", string.Empty }
         });
@@ -50,13 +138,13 @@ public class PresentationBuilder
 
         foreach (var lyrics in lyricsPerSlide)
         {
-            AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
+            AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.Ondertiteling], new Dictionary<string, string>
             {
                 { "Liedtekst", lyrics }
             });
         }
 
-        AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
+        AddTemplateSlideAndReplaceText(_slidePartsById[SlideLayout.Ondertiteling], new Dictionary<string, string>
         {
             { "Liedtekst", string.Empty }
         });
