@@ -1,16 +1,45 @@
-﻿using DeBron.PowerPoint.Builder.Models;
+﻿using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
+using PresentationPart = DeBron.PowerPoint.Builder.Models.PresentationPart;
+using SlideLayout = DeBron.PowerPoint.Builder.Models.SlideLayout;
 
 namespace DeBron.PowerPoint.Builder;
 
 public class PresentationBuilder
 {
-    private readonly PresentationPart _presentationPart;
-    private readonly List<(SlideLayoutPart LayoutPart, Slide Slide)> _slideParts;
+    private readonly DocumentFormat.OpenXml.Packaging.PresentationPart _presentationPart;
+    private readonly Dictionary<SlideLayout, (SlideLayoutPart LayoutPart, Slide Slide)> _slidePartsById;
     private readonly string _fileName = $"{Guid.NewGuid()}.pptx";
     private readonly PresentationDocument _presentationDocument;
     private uint _maxSlideId = 256;
+
+    private readonly SlideLayout[] _slideLayoutOrder =
+    [
+        SlideLayout.WelkomVooraf,
+        SlideLayout.LiturgieVooraf,
+        SlideLayout.CollecteEenDoelVooraf,
+        SlideLayout.CollecteTweeDoelenVooraf,
+        SlideLayout.Thema,
+        SlideLayout.Welkom,
+        SlideLayout.Liturgie,
+        SlideLayout.PaarsMetTitel,
+        SlideLayout.TussenSlide,
+        SlideLayout.LiedAankondiging,
+        SlideLayout.LiedAankondigingOverlay,
+        SlideLayout.Ondertiteling,
+        SlideLayout.Gebed,
+        SlideLayout.BlauwMetTitel,
+        SlideLayout.LuisterLiedAankondiging,
+        SlideLayout.WitMetLiedtekst,
+        SlideLayout.Koffermoment,
+        SlideLayout.BijbellezenAankondiging,
+        SlideLayout.Bijbeltekst,
+        SlideLayout.CollecteEenDoel,
+        SlideLayout.CollecteTweeDoelen,
+        SlideLayout.TotZiensMetGebed,
+        SlideLayout.TotZiens
+    ];
 
     public PresentationBuilder()
     {
@@ -19,47 +48,33 @@ public class PresentationBuilder
         _presentationDocument = PresentationDocument.Open(_fileName, true);
         _presentationPart = _presentationDocument.PresentationPart!;
 
-        _slideParts = _presentationPart.SlideParts.Select(s => (s.SlideLayoutPart!, (Slide)s.Slide.CloneNode(true))).ToList();
+        var slideIdList = _presentationPart.Presentation.SlideIdList;
+
+        _slidePartsById = (slideIdList?.OfType<SlideId>().Select(slideId =>
+        {
+            var slidePart = (SlidePart)_presentationPart.GetPartById(slideId.RelationshipId!);
+
+            return (slidePart.SlideLayoutPart!, (Slide)slidePart.Slide.CloneNode(true));
+        }).ToList() ?? []).Zip(_slideLayoutOrder).ToDictionary(x => x.Second, x => x.First);
         
         RemoveExistingSlides();
     }
     
-    public string Build(List<Song> songs)
+    public string Build(List<PresentationPart> parts)
     {
-        songs.ForEach(AddSongWithSubtitles);
+        foreach (var presentationPart in parts)
+        {
+            var slides = presentationPart.GetSlides();
+
+            foreach (var (slideLayout, placeholderValues) in slides)
+            {
+                AddTemplateSlideAndReplaceText(_slidePartsById[slideLayout], placeholderValues);
+            }
+        }
 
         _presentationDocument.Dispose();
 
         return _fileName;
-    }
-
-    private void AddSongWithSubtitles(Song song)
-    {
-        AddTemplateSlideAndReplaceText(_slideParts[1], new Dictionary<string, string>
-        {
-            { "Titel", song.Name },
-            { "Ondertitel", song.Subtitle }
-        });
-
-        AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
-        {
-            { "Liedtekst", string.Empty }
-        });
-
-        var lyricsPerSlide = song.Lyrics.Trim().Split("\n\n").SelectMany<string, string>(x => x.StartsWith("\n") ? [string.Empty, x.Trim()] : [x.Trim()]).ToList();
-
-        foreach (var lyrics in lyricsPerSlide)
-        {
-            AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
-            {
-                { "Liedtekst", lyrics }
-            });
-        }
-
-        AddTemplateSlideAndReplaceText(_slideParts[0], new Dictionary<string, string>
-        {
-            { "Liedtekst", string.Empty }
-        });
     }
 
     private void RemoveExistingSlides()
@@ -81,11 +96,41 @@ public class PresentationBuilder
         var newSlidePart = CopySlide(slidePart);
 
         var texts = newSlidePart.Slide.Descendants<DocumentFormat.OpenXml.Drawing.Text>().ToList();
+        var combinedText = string.Concat(texts.Select(t => t.Text));
+
         foreach (var (placeholder, value) in replacements)
         {
+            var placeholderPattern = new Regex($"{{{{{placeholder}}}}}", RegexOptions.IgnoreCase);
+            var matches = placeholderPattern.Matches(combinedText);
+
+            var pos = 0;
+            var offset = 0;
             foreach (var text in texts)
             {
-                text.Text = text.Text.Replace($"{{{{{placeholder}}}}}", value);
+                var textLength = text.Text.Length;
+                
+                var alreadyReplaceMatches = matches.Where(m => m.Index < pos && m.Index + m.Length > pos).ToList();
+                
+                foreach (var alreadyReplaceMatch in alreadyReplaceMatches)
+                {
+                    var lengthToRemove = Math.Min(alreadyReplaceMatch.Length - pos + alreadyReplaceMatch.Index, text.Text.Length);
+                    var textToRemove = text.Text.Substring(0, lengthToRemove);
+                    text.Text = text.Text.Replace(textToRemove, string.Empty);
+                }
+                
+                var matchHits = matches.Where(m => m.Index >= pos && m.Index < pos + textLength).ToList();
+                
+                foreach (var matchHit in matchHits)
+                {
+                    var index = matchHit.Index + offset - pos;
+                    var length = Math.Min(matchHit.Length, text.Text.Length - index);
+                    
+                    var textToReplace = text.Text.Substring(index, length);
+                    offset += value.Length - textToReplace.Length;
+                    text.Text = text.Text.Replace(textToReplace, value);
+                }
+
+                pos += textLength;
             }
         }
 

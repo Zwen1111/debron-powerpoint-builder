@@ -17,8 +17,8 @@
 
     <SortableList Class="mb-3 sortableList"
                   Handle=".bb-sortable-list-handle"
-                  TItem="Song"
-                  Data="_songs"
+                  TItem="PresentationPart"
+                  Data="_parts"
                   Context="item"
                   OnUpdate="@MoveParts"
                   EmptyText="Er zijn nog geen nummers toegevoegd.">
@@ -29,13 +29,52 @@
                     <Icon Name="IconName.GripVertical"/>
                 </div>
                 <div class="d-flex flex-row flex-grow-1 gap-1 justify-content-between align-items-center">
-                    <div><b>@item.Name</b> - @item.Subtitle</div>
                     
+                    @switch (item)
+                    {
+                        case Song song:
+                            <div>Lied met ondertiteling: <b>@song.Titel</b> - @song.Ondertitel</div>
+                            break;
+                        case Collection collection:
+                            <div>
+                                Collecte
+                                <label>
+                                    @ToLabel(nameof(collection.EersteDoel))
+                                    <InputText @oninput="@OnInputChanged" @bind-Value="collection.EersteDoel"></InputText>
+                                </label>
+                                <label>
+                                    @ToLabel(nameof(collection.TweedeDoel))
+                                    <InputText @oninput="@OnInputChanged" @bind-Value="collection.TweedeDoel"></InputText>
+                                </label>
+                            </div>
+                            break;
+                        case Prayer:
+                            <div>Gebed</div>
+                            break;
+                        case TrustAndGreeting:
+                            <div>Vertrouwen & groet</div>
+                            break;
+                        case ChildrenMoment childrenMoment:
+                            <label>
+                                @ToLabel(nameof(childrenMoment.Koffermomenter))
+                                <InputText @oninput="@OnInputChanged" @bind-Value="childrenMoment.Koffermomenter"></InputText>
+                            </label>
+                            break;
+                        default:
+                            <span>@item.GetType().Name</span>
+                            break;
+                    }
+
                     <div>
-                        <Button Color="ButtonColor.Light" TooltipTitle="Pas aan" @onclick="@(() => EditSong(item))">
-                            <Icon Name="IconName.Pen"></Icon>
-                        </Button>
-                        <Button Color="ButtonColor.Light" TooltipTitle="Verwijder" @onclick="@(() => RemoveSong(item))">
+                        @if (item is Song s)
+                        {
+                            <Button Color="ButtonColor.Light" TooltipTitle="Pas aan"
+                                    @onclick="@(() => EditSong(s))">
+                                <Icon Name="IconName.Pen"></Icon>
+                            </Button>
+                        }
+                        <Button Color="ButtonColor.Light" TooltipTitle="Verwijder"
+                                @onclick="@(() => RemovePart(item))">
                             <Icon Name="IconName.Trash"></Icon>
                         </Button>
                     </div>
@@ -46,7 +85,17 @@
     </SortableList>
 
     <div class="flex-column gap-1">
-        <Button Color="ButtonColor.Secondary" @onclick="AddSong">Voeg nummer toe</Button>
+        <Dropdown Color="DropdownColor.Secondary">
+            <DropdownToggleButton>Voeg onderdeel toe</DropdownToggleButton>
+            <DropdownMenu>
+                <DropdownItem Type="DropdownItemType.Button" @onclick="AddSong">Lied met ondertiteling</DropdownItem>
+                <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new Collection())">Collecte</DropdownItem>
+                <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new Prayer())">Gebed</DropdownItem>
+                <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new TrustAndGreeting())">Vertrouwen & groet</DropdownItem>
+                <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new ChildrenMoment())">Koffermoment</DropdownItem>
+            </DropdownMenu>
+        </Dropdown>
+        <Button Color="ButtonColor.Danger" @onclick="ClearParts">Verwijder alles</Button>
         <Button @ref="_generateButton" Color="ButtonColor.Primary" @onclick="Generate">Genereer presentatie</Button>
     </div>
 </div>
@@ -55,27 +104,34 @@
     <Dialog Title="Voeg nummer toe" OkButtonType="ButtonType.Submit" Opened="_addSongDialogOpen" CloseButtonClicked="CloseDialog" OkText="Sla op">
         <div class="flex-column flex-grow-1 gap-1">
             <label class="flex-column">
-                Naam
-                <InputText @bind-Value="Song.Name"></InputText>
+                @ToLabel(nameof(Song.Titel))
+                <InputText @bind-Value="Song.Titel"></InputText>
             </label>
             <label class="flex-column">
-                Ondertitel/Artiest
-                <InputText @bind-Value="Song.Subtitle"></InputText>
+                @ToLabel(nameof(Song.Ondertitel))
+                <InputText @bind-Value="Song.Ondertitel"></InputText>
             </label>
             <label class="flex-column flex-grow-1">
-                Songtekst (lege regel voor nieuwe dia, 2 lege regels voor lege dia ertussen)
-                <InputTextArea id="lyricsTextArea" @bind-Value="Song.Lyrics" class="flex-grow-1" ></InputTextArea>
+                @ToLabel(nameof(Song.Liedtekst)) (lege regel voor nieuwe dia, 2 lege regels voor lege dia ertussen)
+                <InputTextArea id="lyricsTextArea" @bind-Value="Song.Liedtekst" class="flex-grow-1" ></InputTextArea>
             </label>
         </div>
     </Dialog>
 </form>
 
 @code {
-    private List<Song> _songs = [];
+    private List<PresentationPart> _parts = [];
     private bool _addSongDialogOpen;
     private bool _renderedDialog = false;
     private Song Song { get; set; } = new();
     private Button _generateButton = null!;
+    private System.Timers.Timer _debounceTimer;
+    
+    private readonly JsonSerializerOptions _serializeOptions = new()
+    {
+        Converters = { new PresentationPartConverter() },
+        WriteIndented = true
+    };
     
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -87,26 +143,45 @@
         
         if (firstRender)
         {
-            var savedSongs = await Js.InvokeAsync<string>("localStorageFunctions.getItem", "songs");
-            if (!string.IsNullOrEmpty(savedSongs))
+            var savedPresentationParts = await Js.InvokeAsync<string>("localStorageFunctions.getItem", "presentationParts");
+            if (!string.IsNullOrEmpty(savedPresentationParts))
             {
-                _songs = JsonSerializer.Deserialize<List<Song>>(savedSongs) ?? [];
+                _parts = JsonSerializer.Deserialize<List<PresentationPart>>(savedPresentationParts, _serializeOptions) ?? [];
             }
             
             StateHasChanged();
         }
     }
 
-    private void MoveParts(SortableListEventArgs args)
+    private void OnInputChanged()
     {
-        var itemToMove = _songs[args.OldIndex];
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
 
-        _songs.RemoveAt(args.OldIndex);
+        _debounceTimer = new System.Timers.Timer(1000); // 1000 ms = 1 seconde
+        _debounceTimer.Elapsed += async (_, _) =>
+        {
+            _debounceTimer?.Stop();
+            _debounceTimer?.Dispose();
 
-        if (args.NewIndex < _songs.Count)
-            _songs.Insert(args.NewIndex, itemToMove);
+            await SavePartsToLocalStorage();
+        };
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Start();
+    }
+
+    private async Task MoveParts(SortableListEventArgs args)
+    {
+        var itemToMove = _parts[args.OldIndex];
+
+        _parts.RemoveAt(args.OldIndex);
+
+        if (args.NewIndex < _parts.Count)
+            _parts.Insert(args.NewIndex, itemToMove);
         else
-            _songs.Add(itemToMove);
+            _parts.Add(itemToMove);
+
+        await SavePartsToLocalStorage();
     }
     
     private void CloseDialog()
@@ -114,6 +189,12 @@
         _addSongDialogOpen = false;
         Song = new Song();
         _renderedDialog = false;
+    }
+
+    private async Task AddPart(PresentationPart part)
+    {
+        _parts.Add(part);
+        await SavePartsToLocalStorage();
     }
 
     private void AddSong()
@@ -127,45 +208,50 @@
         _addSongDialogOpen = true;
     }
     
-    private void RemoveSong(Song song)
+    private async Task RemovePart(PresentationPart part)
     {
-        _songs.Remove(song);
-        
-        Js.InvokeVoidAsync("localStorageFunctions.setItem", "songs", JsonSerializer.Serialize(_songs));
+        _parts.Remove(part);
+
+        await SavePartsToLocalStorage();
     }
     
     private async Task OnSubmit()
     {
-        if (_songs.Any(s => s.Id == Song.Id))
+        var existingSong = _parts.OfType<Song>().FirstOrDefault(s => s.Id == Song.Id); 
+        
+        if (existingSong != null)
         {
-            var existingSong = _songs.First(s => s.Id == Song.Id);
-            existingSong.Name = Song.Name;
-            existingSong.Subtitle = Song.Subtitle;
-            existingSong.Lyrics = Song.Lyrics;
+            existingSong.Titel = Song.Titel;
+            existingSong.Ondertitel = Song.Ondertitel;
+            existingSong.Liedtekst = Song.Liedtekst;
         }
         else
         {
-            _songs.Add(Song);
+            _parts.Add(Song);
         }
         
         Song = new Song();
         _addSongDialogOpen = false;
         
-        // Sla de nummers op in localStorage
-        await Js.InvokeVoidAsync("localStorageFunctions.setItem", "songs", JsonSerializer.Serialize(_songs));
+        await SavePartsToLocalStorage();
+    }
+    
+    private async Task SavePartsToLocalStorage()
+    {
+        await Js.InvokeVoidAsync("localStorageFunctions.setItem", "presentationParts", JsonSerializer.Serialize(_parts, _serializeOptions));
     }
 
-    private async Task ClearSongs()
+    private async Task ClearParts()
     {
-        _songs.Clear();
-        await Js.InvokeVoidAsync("localStorageFunctions.removeItem", "songs");
+        _parts.Clear();
+        await Js.InvokeVoidAsync("localStorageFunctions.removeItem", "presentationParts");
     }
 
     private async Task Generate()
     {
         _generateButton.ShowLoading("Genereren...");
         
-        var fileName = new PresentationBuilder().Build(_songs);
+        var fileName = new PresentationBuilder().Build(_parts);
 
         var stream = File.Open(fileName, FileMode.Open, FileAccess.Read);
         
@@ -184,7 +270,7 @@
         if (!string.IsNullOrWhiteSpace(currentText)) return Task.FromResult(string.Empty);
         
         var transformed = TransformPastedText(pastedText);
-        Song.Lyrics = transformed;
+        Song.Liedtekst = transformed;
         StateHasChanged(); // Update de UI
         return Task.FromResult(transformed);
     }
@@ -224,5 +310,18 @@
         }
 
         return string.Join("\n", result);
+    }
+
+    private string ToLabel(string name)
+    {
+        var r = new Regex(@"
+                (?<=[A-Z])(?=[A-Z][a-z]) |
+                 (?<=[^A-Z])(?=[A-Z]) |
+                 (?<=[A-Za-z])(?=[^A-Za-z])", RegexOptions.IgnorePatternWhitespace);
+
+
+        var label = r.Replace(name, " ").ToLower();
+        
+        return $"{label.First().ToString().ToUpper()}{label.Substring(1)}";
     }
 }
