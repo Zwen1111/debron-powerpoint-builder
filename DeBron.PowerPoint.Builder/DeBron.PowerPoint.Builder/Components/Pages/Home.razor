@@ -15,10 +15,15 @@
 
     <h1>debron Presentatie Generator</h1>
 
+    <label>
+        Thema
+        <InputText @oninput="@OnInputChanged" @bind-Value="_presentation.Theme"></InputText>
+    </label>
+
     <SortableList Class="mb-3 sortableList"
                   Handle=".bb-sortable-list-handle"
                   TItem="PresentationPart"
-                  Data="_parts"
+                  Data="_presentation.Parts"
                   Context="item"
                   OnUpdate="@MoveParts"
                   EmptyText="Er zijn nog geen nummers toegevoegd.">
@@ -120,12 +125,14 @@
 </form>
 
 @code {
-    private List<PresentationPart> _parts = [];
+    private Presentation _presentation = new();
     private bool _addSongDialogOpen;
     private bool _renderedDialog = false;
     private Song Song { get; set; } = new();
     private Button _generateButton = null!;
-    private System.Timers.Timer _debounceTimer;
+    private System.Timers.Timer? _debounceTimer;
+    private readonly string _presentationThemeLocalStorageKey = "presentation_theme_v1";
+    private readonly string _presentationPartsLocalStorageKey = "presentation_parts_v1";
     
     private readonly JsonSerializerOptions _serializeOptions = new()
     {
@@ -143,10 +150,15 @@
         
         if (firstRender)
         {
-            var savedPresentationParts = await Js.InvokeAsync<string>("localStorageFunctions.getItem", "presentationParts");
+            var savedPresentationTheme = await Js.InvokeAsync<string>("localStorageFunctions.getItem", _presentationThemeLocalStorageKey);
+            var savedPresentationParts = await Js.InvokeAsync<string>("localStorageFunctions.getItem", _presentationPartsLocalStorageKey);
             if (!string.IsNullOrEmpty(savedPresentationParts))
             {
-                _parts = JsonSerializer.Deserialize<List<PresentationPart>>(savedPresentationParts, _serializeOptions) ?? [];
+                _presentation = new Presentation
+                {
+                    Theme = savedPresentationTheme.Trim(),
+                    Parts = JsonSerializer.Deserialize<List<PresentationPart>>(savedPresentationParts, _serializeOptions) ?? new()
+                };
             }
             
             StateHasChanged();
@@ -172,14 +184,14 @@
 
     private async Task MoveParts(SortableListEventArgs args)
     {
-        var itemToMove = _parts[args.OldIndex];
+        var itemToMove = _presentation.Parts[args.OldIndex];
 
-        _parts.RemoveAt(args.OldIndex);
+        _presentation.Parts.RemoveAt(args.OldIndex);
 
-        if (args.NewIndex < _parts.Count)
-            _parts.Insert(args.NewIndex, itemToMove);
+        if (args.NewIndex < _presentation.Parts.Count)
+            _presentation.Parts.Insert(args.NewIndex, itemToMove);
         else
-            _parts.Add(itemToMove);
+            _presentation.Parts.Add(itemToMove);
 
         await SavePartsToLocalStorage();
     }
@@ -193,7 +205,7 @@
 
     private async Task AddPart(PresentationPart part)
     {
-        _parts.Add(part);
+        _presentation.Parts.Add(part);
         await SavePartsToLocalStorage();
     }
 
@@ -210,14 +222,14 @@
     
     private async Task RemovePart(PresentationPart part)
     {
-        _parts.Remove(part);
+        _presentation.Parts.Remove(part);
 
         await SavePartsToLocalStorage();
     }
     
     private async Task OnSubmit()
     {
-        var existingSong = _parts.OfType<Song>().FirstOrDefault(s => s.Id == Song.Id); 
+        var existingSong = _presentation.Parts.OfType<Song>().FirstOrDefault(s => s.Id == Song.Id); 
         
         if (existingSong != null)
         {
@@ -227,7 +239,7 @@
         }
         else
         {
-            _parts.Add(Song);
+            _presentation.Parts.Add(Song);
         }
         
         Song = new Song();
@@ -238,20 +250,22 @@
     
     private async Task SavePartsToLocalStorage()
     {
-        await Js.InvokeVoidAsync("localStorageFunctions.setItem", "presentationParts", JsonSerializer.Serialize(_parts, _serializeOptions));
+        await Js.InvokeVoidAsync("localStorageFunctions.setItem", _presentationThemeLocalStorageKey, _presentation.Theme);
+        await Js.InvokeVoidAsync("localStorageFunctions.setItem", _presentationPartsLocalStorageKey, JsonSerializer.Serialize(_presentation.Parts, _serializeOptions));
     }
 
     private async Task ClearParts()
     {
-        _parts.Clear();
-        await Js.InvokeVoidAsync("localStorageFunctions.removeItem", "presentationParts");
+        _presentation = new Presentation();
+        await Js.InvokeVoidAsync("localStorageFunctions.removeItem", _presentationThemeLocalStorageKey);
+        await Js.InvokeVoidAsync("localStorageFunctions.removeItem", _presentationPartsLocalStorageKey);
     }
 
     private async Task Generate()
     {
         _generateButton.ShowLoading("Genereren...");
         
-        var fileName = new PresentationBuilder().Build(_parts);
+        var fileName = new PresentationBuilder().Build(_presentation.Parts);
 
         var stream = File.Open(fileName, FileMode.Open, FileAccess.Read);
         
