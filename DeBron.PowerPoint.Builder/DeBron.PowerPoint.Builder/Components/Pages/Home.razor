@@ -65,6 +65,33 @@
                                 <InputText @oninput="@OnInputChanged" @bind-Value="childrenMoment.Koffermomenter"></InputText>
                             </label>
                             break;
+                        case BibleReading bibleReading:
+                            <div>
+                                <Dropdown Color="DropdownColor.Secondary">
+                                    <DropdownToggleButton>@(bibleReading.BiblebookName ?? "Bijbelboek")</DropdownToggleButton>
+                                    <DropdownMenu>
+                                        @foreach (var book in Constants.Biblebooks.Keys)
+                                        {
+                                            <DropdownItem Type="DropdownItemType.Button" @onclick="() => { bibleReading.BiblebookName = book; }">
+                                                @book
+                                            </DropdownItem>
+                                        }
+                                    </DropdownMenu>
+                                </Dropdown>
+                                @if (!string.IsNullOrEmpty(bibleReading.BiblebookName))
+                                {
+                                    <NumberInput TValue="int" @bind-Value="@bibleReading.Chapter" Placeholder="Hoofdstuk"/>
+                                }
+                                @if (bibleReading.Chapter != 0)
+                                {
+                                    <NumberInput TValue="int" @bind-Value="@bibleReading.StartVerse" Placeholder="Vanaf"/>
+                                }
+                                @if (bibleReading.Chapter != 0)
+                                {
+                                    <NumberInput TValue="int" @bind-Value="@bibleReading.StartVerse" Placeholder="t/m"/>
+                                }
+                            </div>
+                            break;
                         default:
                             <span>@item.GetType().Name</span>
                             break;
@@ -98,6 +125,7 @@
                 <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new Prayer())">Gebed</DropdownItem>
                 <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new TrustAndGreeting())">Vertrouwen & groet</DropdownItem>
                 <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new ChildrenMoment())">Koffermoment</DropdownItem>
+                <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new BibleReading())">Bijbellezing</DropdownItem>
             </DropdownMenu>
         </Dropdown>
         <Button Color="ButtonColor.Danger" @onclick="ClearParts">Verwijder alles</Button>

@@ -92,16 +92,10 @@ public record Prayer : PresentationPart
 
 public record BibleReading : PresentationPart
 {
-    public string Title
-    {
-        get => PlaceholderValues.TryGetValue(nameof(Title), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Title)] = value;
-    }
-    public string Text
-    {
-        get => PlaceholderValues.TryGetValue(nameof(Text), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Text)] = value;
-    }
+    public string? BiblebookName { get; set; }
+    public int Chapter { get; set; } = 1;
+    public int StartVerse { get; set; } = 1;
+    public int EndVerse { get; set; } = 1;
 
     public override IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false)
     {
