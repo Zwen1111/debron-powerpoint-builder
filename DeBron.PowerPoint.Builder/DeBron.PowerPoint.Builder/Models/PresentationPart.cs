@@ -6,9 +6,9 @@ namespace DeBron.PowerPoint.Builder.Models;
 public abstract record PresentationPart
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    internal readonly Dictionary<string, string> PlaceholderValues = new();
+    internal readonly Dictionary<string, List<StringReplaceValue>> PlaceholderValues = new();
 
-    public abstract IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false);
+    public abstract IEnumerable<(SlideLayout Layout, Dictionary<string, List<StringReplaceValue>> PlaceholderValues)> GetSlides(bool isPriorToService = false);
 }
 
 public record Song : PresentationPart
@@ -17,28 +17,28 @@ public record Song : PresentationPart
 
     public string Titel
     {
-        get => PlaceholderValues.TryGetValue(nameof(Titel), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Titel)] = value;
+        get => PlaceholderValues.TryGetValue(nameof(Titel), out var value) ? value.Single().Value : string.Empty;
+        set => PlaceholderValues[nameof(Titel)] = [new StringReplaceValue(value)];
     }
 
     public string Ondertitel
     {
-        get => PlaceholderValues.TryGetValue(nameof(Ondertitel), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Ondertitel)] = value;
+        get => PlaceholderValues.TryGetValue(nameof(Ondertitel), out var value) ? value.Single().Value : string.Empty;
+        set => PlaceholderValues[nameof(Ondertitel)] = [new StringReplaceValue(value)];
     }
     public string Liedtekst
     {
-        get => PlaceholderValues.TryGetValue(nameof(Liedtekst), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Liedtekst)] = value;
+        get => PlaceholderValues.TryGetValue(nameof(Liedtekst), out var value) ? value.Single().Value : string.Empty;
+        set => PlaceholderValues[nameof(Liedtekst)] = [new StringReplaceValue(value)];
     }
 
-    public override IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false)
+    public override IEnumerable<(SlideLayout Layout, Dictionary<string, List<StringReplaceValue>> PlaceholderValues)> GetSlides(bool isPriorToService = false)
     {
         yield return (SlideLayout.LiedAankondigingOverlay, PlaceholderValues);
 
-        yield return (SlideLayout.Ondertiteling, new Dictionary<string, string>
+        yield return (SlideLayout.Ondertiteling, new Dictionary<string, List<StringReplaceValue>>
         {
-            { nameof(Liedtekst), string.Empty }
+            { nameof(Liedtekst), [new StringReplaceValue(string.Empty)] }
         });
 
         var lyricsPerSlide = Liedtekst.Trim().Split("\n\n")
@@ -46,15 +46,15 @@ public record Song : PresentationPart
 
         foreach (var lyrics in lyricsPerSlide)
         {
-            yield return (SlideLayout.Ondertiteling, new Dictionary<string, string>
+            yield return (SlideLayout.Ondertiteling, new Dictionary<string, List<StringReplaceValue>>
             {
-                { nameof(Liedtekst), lyrics }
+                { nameof(Liedtekst), [new StringReplaceValue(lyrics)] }
             });
         }
 
-        yield return (SlideLayout.Ondertiteling, new Dictionary<string, string>
+        yield return (SlideLayout.Ondertiteling, new Dictionary<string, List<StringReplaceValue>>
         {
-            { nameof(Liedtekst), string.Empty }
+            { nameof(Liedtekst), [new StringReplaceValue(string.Empty)] }
         });
     }
 }
@@ -63,16 +63,16 @@ public record Collection : PresentationPart
 {
     public string EersteDoel
     {
-        get => PlaceholderValues.TryGetValue(nameof(EersteDoel), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(EersteDoel)] = value;
+        get => PlaceholderValues.TryGetValue(nameof(EersteDoel), out var value) ? value.Single().Value : string.Empty;
+        set => PlaceholderValues[nameof(EersteDoel)] = [new StringReplaceValue(value)];
     }
     public string TweedeDoel
     {
-        get => PlaceholderValues.TryGetValue(nameof(TweedeDoel), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(TweedeDoel)] = value;
+        get => PlaceholderValues.TryGetValue(nameof(TweedeDoel), out var value) ? value.Single().Value : string.Empty;
+        set => PlaceholderValues[nameof(TweedeDoel)] = [new StringReplaceValue(value)];
     }
 
-    public override IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false)
+    public override IEnumerable<(SlideLayout Layout, Dictionary<string, List<StringReplaceValue>> PlaceholderValues)> GetSlides(bool isPriorToService = false)
     {
         var layout = isPriorToService ? SlideLayout.CollecteTweeDoelenVooraf : SlideLayout.CollecteTweeDoelen;
         
@@ -87,48 +87,96 @@ public record Collection : PresentationPart
 
 public record Prayer : PresentationPart
 {
-    public override IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false) => [(SlideLayout.Gebed, PlaceholderValues)];
+    public override IEnumerable<(SlideLayout Layout, Dictionary<string, List<StringReplaceValue>> PlaceholderValues)> GetSlides(bool isPriorToService = false) => [(SlideLayout.Gebed, PlaceholderValues)];
 }
 
 public record BibleReading : PresentationPart
 {
-    public string Title
-    {
-        get => PlaceholderValues.TryGetValue(nameof(Title), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Title)] = value;
-    }
-    public string Text
-    {
-        get => PlaceholderValues.TryGetValue(nameof(Text), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Text)] = value;
-    }
+    public string Reader { get; set; }
+    public string BiblebookName { get; set; }
+    public int? Chapter { get; set; }
+    public int? StartVerse { get; set; }
+    public int? EndVerse { get; set; }
 
-    public override IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false)
+    public override IEnumerable<(SlideLayout Layout, Dictionary<string, List<StringReplaceValue>> PlaceholderValues)> GetSlides(bool isPriorToService = false)
     {
+        if (!Chapter.HasValue || !StartVerse.HasValue || !EndVerse.HasValue) throw new ArgumentNullException();
+
+        PlaceholderValues["Bijbellezer"] =
+            [new StringReplaceValue(Reader)];
+        PlaceholderValues["Bijbelgedeelte"] =
+            [new StringReplaceValue($"{BiblebookName} {Chapter} : {StartVerse} - {EndVerse}")];
         yield return (SlideLayout.BijbellezenAankondiging, PlaceholderValues);
-        yield return (SlideLayout.Bijbeltekst, PlaceholderValues);
+        
+        var verses = BibletextProvider.Provide(Constants.Biblebooks[BiblebookName], Chapter.Value, StartVerse.Value, EndVerse.Value);
+
+        var queue = new Queue<Verse>(verses);
+
+        var versesOnCurrentSlide = new List<StringReplaceValue>();
+
+        var amountOfCharactersOnCurrentSlide = 0;
+
+        while (queue.Any())
+        {
+            var verse = queue.Dequeue();
+
+            var sentences = verse.Text.Split(". ");
+
+            for (int i = 0; i < sentences.Length; i++)
+            {
+                var sentence = sentences[i];
+                
+                var textLength =  sentence.Length + (i == 0 ? verse.Number.ToString().Length : 0);
+                
+                if (amountOfCharactersOnCurrentSlide + textLength <= 425)
+                {
+                    if (i == 0)
+                    {
+                        versesOnCurrentSlide.Add(new StringReplaceValue(verse.Number.ToString(), true));
+                    }
+
+                    versesOnCurrentSlide.Add(new StringReplaceValue(sentence));
+                    
+                    amountOfCharactersOnCurrentSlide += textLength;
+                }
+                else
+                {
+                    PlaceholderValues["Bijbeltekst"] = versesOnCurrentSlide;
+                    yield return (SlideLayout.Bijbeltekst, PlaceholderValues);
+                    
+                    versesOnCurrentSlide = [];
+                    amountOfCharactersOnCurrentSlide = 0;
+                }
+            }
+        }
+
+        if (versesOnCurrentSlide.Any())
+        {
+            PlaceholderValues["Bijbeltekst"] = versesOnCurrentSlide;
+            yield return (SlideLayout.Bijbeltekst, PlaceholderValues);
+        }
     }
 }
 
 public record TrustAndGreeting : PresentationPart
 {
-    public new Dictionary<string, string> PlaceholderValues { get; } = new()
+    public new Dictionary<string, List<StringReplaceValue>> PlaceholderValues { get; } = new()
     {
-        { "Titel", "vertrouwen & groet" }
+        { "Titel", [new StringReplaceValue("vertrouwen & groet")] }
     };
     
-    public override IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false) => [(SlideLayout.PaarsMetTitel, PlaceholderValues)];
+    public override IEnumerable<(SlideLayout Layout, Dictionary<string, List<StringReplaceValue>> PlaceholderValues)> GetSlides(bool isPriorToService = false) => [(SlideLayout.PaarsMetTitel, PlaceholderValues)];
 }
 
 public record ChildrenMoment : PresentationPart
 {
     public string Koffermomenter
     {
-        get => PlaceholderValues.TryGetValue(nameof(Koffermomenter), out var value) ? value : string.Empty;
-        set => PlaceholderValues[nameof(Koffermomenter)] = value;
+        get => PlaceholderValues.TryGetValue(nameof(Koffermomenter), out var value) ? value.Single().Value : string.Empty;
+        set => PlaceholderValues[nameof(Koffermomenter)] = [new StringReplaceValue(value)];
     }
 
-    public override IEnumerable<(SlideLayout Layout, Dictionary<string, string> PlaceholderValues)> GetSlides(bool isPriorToService = false) => [(SlideLayout.Koffermoment, PlaceholderValues)];
+    public override IEnumerable<(SlideLayout Layout, Dictionary<string, List<StringReplaceValue>> PlaceholderValues)> GetSlides(bool isPriorToService = false) => [(SlideLayout.Koffermoment, PlaceholderValues)];
 }
 
 public class PresentationPartConverter : JsonConverter<PresentationPart>
@@ -196,3 +244,5 @@ public enum SlideLayout
     TotZiensMetGebed,
     TotZiens
 }
+
+public record StringReplaceValue(string Value, bool Superscript = false);

@@ -11,6 +11,8 @@
     <ItemGroup>
       <PackageReference Include="Blazor.Bootstrap" Version="3.3.1" />
       <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+      <PackageReference Include="Selenium.WebDriver" Version="4.38.0" />
+      <PackageReference Include="Selenium.WebDriver.ChromeDriver" Version="141.0.7390.12200" />
     </ItemGroup>
 
     <ItemGroup>

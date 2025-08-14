@@ -1,8 +1,15 @@
 ﻿using System.Text.RegularExpressions;
+using DeBron.PowerPoint.Builder.Models;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
+using DocumentFormat.OpenXml.Spreadsheet;
+using DocumentFormat.OpenXml.Wordprocessing;
+using Paragraph = DocumentFormat.OpenXml.Drawing.Paragraph;
 using PresentationPart = DeBron.PowerPoint.Builder.Models.PresentationPart;
+using Run = DocumentFormat.OpenXml.Drawing.Run;
 using SlideLayout = DeBron.PowerPoint.Builder.Models.SlideLayout;
+using Text = DocumentFormat.OpenXml.Drawing.Text;
+using VerticalTextAlignment = DocumentFormat.OpenXml.Spreadsheet.VerticalTextAlignment;
 
 namespace DeBron.PowerPoint.Builder;
 
@@ -91,46 +98,78 @@ public class PresentationBuilder
 
     private void AddTemplateSlideAndReplaceText(
         (SlideLayoutPart LayoutPart, Slide Slide) slidePart,
-        Dictionary<string, string> replacements)
+        Dictionary<string, List<StringReplaceValue>> replacements)
     {
         var newSlidePart = CopySlide(slidePart);
 
-        var texts = newSlidePart.Slide.Descendants<DocumentFormat.OpenXml.Drawing.Text>().ToList();
-        var combinedText = string.Concat(texts.Select(t => t.Text));
-
-        foreach (var (placeholder, value) in replacements)
+        foreach (var (placeholder, values) in replacements)
         {
             var placeholderPattern = new Regex($"{{{{{placeholder}}}}}", RegexOptions.IgnoreCase);
-            var matches = placeholderPattern.Matches(combinedText);
+            
+            var paragraphs = newSlidePart.Slide.Descendants<Paragraph>().ToList();
 
-            var pos = 0;
-            var offset = 0;
-            foreach (var text in texts)
+            foreach (var paragraph in paragraphs)
             {
-                var textLength = text.Text.Length;
-                
-                var alreadyReplaceMatches = matches.Where(m => m.Index < pos && m.Index + m.Length > pos).ToList();
-                
-                foreach (var alreadyReplaceMatch in alreadyReplaceMatches)
-                {
-                    var lengthToRemove = Math.Min(alreadyReplaceMatch.Length - pos + alreadyReplaceMatch.Index, text.Text.Length);
-                    var textToRemove = text.Text.Substring(0, lengthToRemove);
-                    text.Text = text.Text.Replace(textToRemove, string.Empty);
-                }
-                
-                var matchHits = matches.Where(m => m.Index >= pos && m.Index < pos + textLength).ToList();
-                
-                foreach (var matchHit in matchHits)
-                {
-                    var index = matchHit.Index + offset - pos;
-                    var length = Math.Min(matchHit.Length, text.Text.Length - index);
-                    
-                    var textToReplace = text.Text.Substring(index, length);
-                    offset += value.Length - textToReplace.Length;
-                    text.Text = text.Text.Replace(textToReplace, value);
-                }
+                var runs = paragraph.Descendants<Run>().ToList();
 
-                pos += textLength;
+                var newRuns = new List<Run>();
+
+                foreach (var run in runs)
+                {
+                    var matches = placeholderPattern.Matches(run.Text.Text).ToList();
+
+                    if (matches.Count == 0)
+                    {
+                        newRuns.Add(run);
+                        continue;
+                    }
+
+                    foreach (var match in matches)
+                    {
+                        var index = match.Index;
+                        var length = match.Length;
+
+                        var preRun = run.CloneNode(true) as Run;
+                        preRun.RemoveAllChildren<Text>();
+                        var preRunText = new Text(run.Text.Text.Substring(0, index));
+
+                        preRun.AppendChild(preRunText);
+                        newRuns.Add(preRun);
+
+                        newRuns.AddRange(values.Select(replacementValue =>
+                        {
+                            var clonedRun = run.CloneNode(true) as Run;
+                            clonedRun.RemoveAllChildren<Text>();
+
+                            if (replacementValue.Superscript)
+                            {
+                                clonedRun.RunProperties.Baseline = clonedRun.RunProperties.FontSize * 12;
+                            }
+
+                            var clonedText = new Text(replacementValue.Value.ToString());
+
+                            clonedRun.AppendChild(clonedText);
+
+                            return clonedRun;
+                        }));
+
+                        var postRun = run.CloneNode(true) as Run;
+                        postRun.RemoveAllChildren<Text>();
+
+                        var postRunText = new Text(run.Text.Text.Substring(index + length));
+
+                        postRun.AppendChild(postRunText);
+
+                        newRuns.Add(postRun);
+                    }
+                }
+                
+                paragraph.RemoveAllChildren<Run>();
+                
+                foreach (var newRun in newRuns.Where(r => r.Text.Text.Length > 0))
+                {
+                    paragraph.AppendChild(newRun);
+                }
             }
         }
 

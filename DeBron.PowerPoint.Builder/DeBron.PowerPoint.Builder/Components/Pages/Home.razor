@@ -65,6 +65,26 @@
                                 <InputText @oninput="@OnInputChanged" @bind-Value="childrenMoment.Koffermomenter"></InputText>
                             </label>
                             break;
+                        case BibleReading bibleReading:
+                            <div class="d-flex flex-row flex-grow-1 gap-1 justify-content-between align-items-center">
+                                <InputText @oninput="@OnInputChanged"
+                                           @bind-Value="@bibleReading.Reader"></InputText>
+                                <Dropdown Color="DropdownColor.Secondary">
+                                    <DropdownToggleButton>@(bibleReading.BiblebookName ?? "Bijbelboek")</DropdownToggleButton>
+                                    <DropdownMenu>
+                                        @foreach (var book in Constants.Biblebooks.Keys)
+                                        {
+                                            <DropdownItem Type="DropdownItemType.Button" @onclick="() => { bibleReading.BiblebookName = book; }">
+                                                @book
+                                            </DropdownItem>
+                                        }
+                                    </DropdownMenu>
+                                </Dropdown>
+                                <NumberInput TValue="int?" @bind-Value="@bibleReading.Chapter" Placeholder="Hoofdstuk"/>
+                                <NumberInput TValue="int?" @bind-Value="@bibleReading.StartVerse" Placeholder="Vanaf"/>
+                                <NumberInput TValue="int?" @bind-Value="@bibleReading.EndVerse" Placeholder="t/m"/>
+                            </div>
+                            break;
                         default:
                             <span>@item.GetType().Name</span>
                             break;
@@ -98,6 +118,7 @@
                 <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new Prayer())">Gebed</DropdownItem>
                 <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new TrustAndGreeting())">Vertrouwen & groet</DropdownItem>
                 <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new ChildrenMoment())">Koffermoment</DropdownItem>
+                <DropdownItem Type="DropdownItemType.Button" @onclick="() => AddPart(new BibleReading())">Bijbellezing</DropdownItem>
             </DropdownMenu>
         </Dropdown>
         <Button Color="ButtonColor.Danger" @onclick="ClearParts">Verwijder alles</Button>
