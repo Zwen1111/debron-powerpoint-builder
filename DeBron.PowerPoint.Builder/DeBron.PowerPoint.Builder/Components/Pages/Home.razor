@@ -284,19 +284,29 @@
 
     private async Task Generate()
     {
-        _generateButton.ShowLoading("Genereren...");
+        var fileName = string.Empty;
         
-        var fileName = new PresentationBuilder().Build(_presentation.Parts);
+        try
+        {
+            _generateButton.ShowLoading("Genereren...");
 
-        var stream = File.Open(fileName, FileMode.Open, FileAccess.Read);
-        
-        using var streamRef = new DotNetStreamReference(stream);
+            fileName = new PresentationBuilder().Build(_presentation.Parts);
 
-        await Js.InvokeVoidAsync("downloadHelper.downloadFileFromStream", "presentation.pptx", streamRef);
-        
-        _generateButton.HideLoading();
-        
-        File.Delete(fileName);
+            var stream = File.Open(fileName, FileMode.Open, FileAccess.Read);
+
+            using var streamRef = new DotNetStreamReference(stream);
+
+            await Js.InvokeVoidAsync("downloadHelper.downloadFileFromStream", "presentation.pptx", streamRef);
+
+            _generateButton.HideLoading();
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(fileName))
+            {
+                File.Delete(fileName);
+            }
+        }
     }
 
     [JSInvokable]
