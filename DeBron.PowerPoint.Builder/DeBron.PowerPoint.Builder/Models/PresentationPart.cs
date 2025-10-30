@@ -42,7 +42,7 @@ public record Song : PresentationPart
         });
 
         var lyricsPerSlide = Liedtekst.Trim().Split("\n\n")
-            .SelectMany<string, string>(x => x.StartsWith("\n") ? [string.Empty, x.Trim()] : [x.Trim()]).ToList();
+            .SelectMany<string, string>(x => x.Trim().StartsWith("\n") ? [string.Empty, x.Trim()] : [x.Trim()]).ToList();
 
         foreach (var lyrics in lyricsPerSlide)
         {
