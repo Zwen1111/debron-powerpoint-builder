@@ -17,97 +17,101 @@
 
     <label>
         Thema
-        <InputText @oninput="@OnInputChanged" @bind-Value="_presentation.Theme"></InputText>
+        <InputText @bind-Value="_presentation.Theme"></InputText>
     </label>
 
-    <SortableList Class="mb-3 sortableList"
-                  Handle=".bb-sortable-list-handle"
-                  TItem="PresentationPart"
-                  Data="_presentation.Parts"
-                  Context="item"
-                  OnUpdate="@MoveParts"
-                  EmptyText="Er zijn nog geen nummers toegevoegd.">
+    <EditForm EditContext="@_editContext">
+        <SortableList Class="mb-3 sortableList"
+                      Handle=".bb-sortable-list-handle"
+                      TItem="PresentationPart"
+                      Data="_presentation.Parts"
+                      Context="item"
+                      OnUpdate="@MoveParts"
+                      EmptyText="Er zijn nog geen nummers toegevoegd.">
 
-        <ItemTemplate>
-            <div class="d-flex justify-content-start align-items-center">
-                <div class="bb-sortable-list-handle pe-2">
-                    <Icon Name="IconName.GripVertical"/>
-                </div>
-                <div class="d-flex flex-row flex-grow-1 gap-1 justify-content-between align-items-center">
-                    
-                    @switch (item)
-                    {
-                        case Song song:
-                            <div>Lied met ondertiteling: <b>@song.Titel</b> - @song.Ondertitel</div>
-                            break;
-                        case Collection collection:
-                            <div>
-                                Collecte
-                                <label>
-                                    @ToLabel(nameof(collection.EersteDoel))
-                                    <InputText @oninput="@OnInputChanged" @bind-Value="collection.EersteDoel"></InputText>
-                                </label>
-                                <label>
-                                    @ToLabel(nameof(collection.TweedeDoel))
-                                    <InputText @oninput="@OnInputChanged" @bind-Value="collection.TweedeDoel"></InputText>
-                                </label>
-                            </div>
-                            break;
-                        case Prayer:
-                            <div>Gebed</div>
-                            break;
-                        case TrustAndGreeting:
-                            <div>Vertrouwen & groet</div>
-                            break;
-                        case ChildrenMoment childrenMoment:
-                            <label>
-                                @ToLabel(nameof(childrenMoment.Koffermomenter))
-                                <InputText @oninput="@OnInputChanged" @bind-Value="childrenMoment.Koffermomenter"></InputText>
-                            </label>
-                            break;
-                        case BibleReading bibleReading:
-                            <div class="d-flex flex-row flex-grow-1 gap-1 justify-content-between align-items-center">
-                                <InputText @oninput="@OnInputChanged"
-                                           @bind-Value="@bibleReading.Reader"></InputText>
-                                <Dropdown Color="DropdownColor.Secondary">
-                                    <DropdownToggleButton>@(bibleReading.BiblebookName ?? "Bijbelboek")</DropdownToggleButton>
-                                    <DropdownMenu>
-                                        @foreach (var book in Constants.Biblebooks.Keys)
-                                        {
-                                            <DropdownItem Type="DropdownItemType.Button" @onclick="() => { bibleReading.BiblebookName = book; }">
-                                                @book
-                                            </DropdownItem>
-                                        }
-                                    </DropdownMenu>
-                                </Dropdown>
-                                <NumberInput TValue="int?" @bind-Value="@bibleReading.Chapter" Placeholder="Hoofdstuk"/>
-                                <NumberInput TValue="int?" @bind-Value="@bibleReading.StartVerse" Placeholder="Vanaf"/>
-                                <NumberInput TValue="int?" @bind-Value="@bibleReading.EndVerse" Placeholder="t/m"/>
-                            </div>
-                            break;
-                        default:
-                            <span>@item.GetType().Name</span>
-                            break;
-                    }
-
-                    <div>
-                        @if (item is Song s)
+            <ItemTemplate>
+                <div class="d-flex justify-content-start align-items-center">
+                    <div class="bb-sortable-list-handle pe-2">
+                        <Icon Name="IconName.GripVertical"/>
+                    </div>
+                    <div class="d-flex flex-row flex-grow-1 gap-1 justify-content-between align-items-center">
+                        
+                        @switch (item)
                         {
-                            <Button Color="ButtonColor.Light" TooltipTitle="Pas aan"
-                                    @onclick="@(() => EditSong(s))">
-                                <Icon Name="IconName.Pen"></Icon>
-                            </Button>
+                            case Song song:
+                                <div>Lied met ondertiteling: <b>@song.Titel</b> - @song.Ondertitel</div>
+                                break;
+                            case Collection collection:
+                                <div>
+                                    Collecte
+                                    <label>
+                                        @ToLabel(nameof(collection.EersteDoel))
+                                        <InputText @bind-Value="collection.EersteDoel"></InputText>
+                                    </label>
+                                    <label>
+                                        @ToLabel(nameof(collection.TweedeDoel))
+                                        <InputText @bind-Value="collection.TweedeDoel"></InputText>
+                                    </label>
+                                </div>
+                                break;
+                            case Prayer:
+                                <div>Gebed</div>
+                                break;
+                            case TrustAndGreeting:
+                                <div>Vertrouwen & groet</div>
+                                break;
+                            case ChildrenMoment childrenMoment:
+                                <label>
+                                    @ToLabel(nameof(childrenMoment.Koffermomenter))
+                                    <InputText @bind-Value="childrenMoment.Koffermomenter"></InputText>
+                                </label>
+                                break;
+                            case BibleReading bibleReading:
+                                <div class="d-flex flex-row flex-grow-1 gap-1 justify-content-between align-items-center">
+                                    <label>
+                                        Lezer
+                                    </label>
+                                    <InputText @bind-Value="@bibleReading.Reader"></InputText>
+                                    <Dropdown Color="DropdownColor.Secondary">
+                                        <DropdownToggleButton>@(bibleReading.BiblebookName ?? "Bijbelboek")</DropdownToggleButton>
+                                        <DropdownMenu>
+                                            @foreach (var book in Constants.Biblebooks.Keys)
+                                            {
+                                                <DropdownItem Type="DropdownItemType.Button" @onclick="() => { bibleReading.BiblebookName = book; }">
+                                                    @book
+                                                </DropdownItem>
+                                            }
+                                        </DropdownMenu>
+                                    </Dropdown>
+                                    <NumberInput TValue="int?" @bind-Value="@bibleReading.Chapter" Placeholder="Hoofdstuk"/>
+                                    <NumberInput TValue="int?" @bind-Value="@bibleReading.StartVerse" Placeholder="Vanaf"/>
+                                    <NumberInput TValue="int?" @bind-Value="@bibleReading.EndVerse" Placeholder="t/m"/>
+                                </div>
+                                break;
+                            default:
+                                <span>@item.GetType().Name</span>
+                                break;
                         }
-                        <Button Color="ButtonColor.Light" TooltipTitle="Verwijder"
-                                @onclick="@(() => RemovePart(item))">
-                            <Icon Name="IconName.Trash"></Icon>
-                        </Button>
+
+                        <div>
+                            @if (item is Song s)
+                            {
+                                <Button Color="ButtonColor.Light" TooltipTitle="Pas aan"
+                                        @onclick="@(() => EditSong(s))">
+                                    <Icon Name="IconName.Pen"></Icon>
+                                </Button>
+                            }
+                            <Button Color="ButtonColor.Light" TooltipTitle="Verwijder"
+                                    @onclick="@(() => RemovePart(item))">
+                                <Icon Name="IconName.Trash"></Icon>
+                            </Button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </ItemTemplate>
+            </ItemTemplate>
 
-    </SortableList>
+        </SortableList>
+    </EditForm>
 
     <div class="flex-column gap-1">
         <Dropdown Color="DropdownColor.Secondary">
@@ -152,6 +156,9 @@
     private Song Song { get; set; } = new();
     private Button _generateButton = null!;
     private System.Timers.Timer? _debounceTimer;
+
+    private EditContext _editContext;
+    
     private readonly string _presentationThemeLocalStorageKey = "presentation_theme_v1";
     private readonly string _presentationPartsLocalStorageKey = "presentation_parts_v1";
     
@@ -160,7 +167,29 @@
         Converters = { new PresentationPartConverter() },
         WriteIndented = true
     };
-    
+
+    private void OnInputChanged(object? sender, FieldChangedEventArgs e)
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+
+        _debounceTimer = new System.Timers.Timer(1000); // 1000 ms = 1 seconde
+        _debounceTimer.Elapsed += async (_, _) =>
+        {
+            _debounceTimer?.Stop();
+            _debounceTimer?.Dispose();
+
+            await SavePartsToLocalStorage();
+        };
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Start();
+    }
+
+    protected override void OnInitialized()
+    {
+        CreateEditContext();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_addSongDialogOpen && !_renderedDialog)
@@ -181,26 +210,11 @@
                     Parts = JsonSerializer.Deserialize<List<PresentationPart>>(savedPresentationParts, _serializeOptions) ?? new()
                 };
             }
+
+            CreateEditContext();
             
             StateHasChanged();
         }
-    }
-
-    private void OnInputChanged()
-    {
-        _debounceTimer?.Stop();
-        _debounceTimer?.Dispose();
-
-        _debounceTimer = new System.Timers.Timer(1000); // 1000 ms = 1 seconde
-        _debounceTimer.Elapsed += async (_, _) =>
-        {
-            _debounceTimer?.Stop();
-            _debounceTimer?.Dispose();
-
-            await SavePartsToLocalStorage();
-        };
-        _debounceTimer.AutoReset = false;
-        _debounceTimer.Start();
     }
 
     private async Task MoveParts(SortableListEventArgs args)
@@ -278,6 +292,9 @@
     private async Task ClearParts()
     {
         _presentation = new Presentation();
+
+        CreateEditContext();
+        
         await Js.InvokeVoidAsync("localStorageFunctions.removeItem", _presentationThemeLocalStorageKey);
         await Js.InvokeVoidAsync("localStorageFunctions.removeItem", _presentationPartsLocalStorageKey);
     }
@@ -369,4 +386,21 @@
         
         return $"{label.First().ToString().ToUpper()}{label.Substring(1)}";
     }
+
+    private void CreateEditContext()
+    {
+        _editContext = new EditContext(_presentation);
+        _editContext.OnFieldChanged += OnInputChanged;
+        _editContext.SetFieldCssClassProvider(new EditContextCssClassProvider());
+    }
+
+    public class EditContextCssClassProvider : FieldCssClassProvider
+    {
+        public override string GetFieldCssClass(EditContext editContext, in FieldIdentifier fieldIdentifier)
+        {
+            // Altijd een lege string teruggeven, dus geen 'valid' of 'invalid' klassen
+            return string.Empty;
+        }
+    }
+
 }
