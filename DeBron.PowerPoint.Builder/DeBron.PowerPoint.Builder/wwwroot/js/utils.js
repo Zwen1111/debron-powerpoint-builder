@@ -22,7 +22,7 @@ window.registerPasteHandler = function (dotNetHelper, elementId) {
         const pastedText = (event.clipboardData || window.clipboardData).getData('text');
 
         const transformed = await dotNetHelper.invokeMethodAsync('HandlePaste', element.textContent, pastedText);
-        element.value = transformed;
+        element.value += transformed;
     });
 };
 
